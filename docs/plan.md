@@ -1,0 +1,91 @@
+# netwatch 开发计划
+
+> 依据 [design.md](./design.md)。每个 Phase 结束要能跑、能验收;Backlog(§11)不进任何 Phase,主线跑通后单独排。
+
+## 约定
+
+- 分支:`main` 保持可跑,功能直接提交(单人项目,不开 PR 流程)。
+- 每个 Phase 开工前:把该 Phase 的验收标准贴进提交说明;验收不过不进下一阶段。
+- 严格 TS(`tsconfig` 沿用 flashcards 那套 strict 配置),`npm run typecheck` 常绿。
+
+---
+
+## Phase 0 — Spike:验证数据源(0.5 天)
+
+- [ ] `sudo nethogs -t -d 2` 本机采样 ≥ 5 分钟,原始输出存 `docs/samples/nethogs.txt`(脚本已备:`sudo bash docs/samples/run-spike.sh`,含受控流量 + ss 旁路采样;等终端执行)
+- [ ] 确认列含义与格式(版本锁定 0.8.7-2build2,见 spike-notes),记录边界情况(UNKNOWN、连接关闭瞬间)——等样本落地
+- [x] 定稿 `TrafficSource` 接口与 `TrafficEvent` 判别联合(§3.4/3.5),写入 `packages/shared`(细化点见 `docs/samples/spike-notes.md`)
+- [x] 顺带确认:ss 轮询兜底、DNS 观察在本机的可行路径(`spike-notes.md`;⚠️ 发现本机走环回代理 127.0.0.1:7897,"传给谁"富化需特殊处理)
+
+**验收**:拿到真实样本;接口签名评审通过(自己读一遍:上层能否对平台零感知?)
+
+## Phase 1 — 采集层 + CLI(1~2 天)
+
+- [x] 初始化 monorepo(shared / collector / web 三包)(npm workspaces + 根 tsconfig.base;web 包随 Phase 4 建)
+- [x] `sources/linux/`:nethogs 子进程管理(启动 / 崩溃退避重启 / SIGTERM 优雅退出)完成;行解析器骨架完成,**待 Phase 0 样本校准**(parse.ts 标注校准点)
+- [x] 内存滚动窗口聚合(分钟桶 × 进程 × 目的地)+ 10s 速率窗 + NEW 首见(启动首屏批视为既有,避免满屏 NEW)
+- [x] CLI:`netwatch-collector` 实时打印"谁在传"(对齐 §5.1:进程卡 / 目的地行 / 占比条 / 代理·局域网·NEW 徽标 / 归因失败卡置底);`--mock` 无 root 端到端跑通,确定性断言全过
+- [ ] 真实源(nethogs)端到端 + 30 分钟稳定性验收(依赖 Phase 0 样本与 root 实测)
+
+**验收**:终端实时刷新 30 分钟无内存泄漏、无崩溃;重启后自动恢复。(待 root 实测)
+
+## Phase 2 — 落库与查询(1 天)
+
+- [ ] SQLite 建表(`flow_minutes` / `destinations` / `alerts`,§4)
+- [ ] 聚合器定期落盘;首见目的地写 `destinations`
+- [ ] 查询 CLI:`top 1h|24h|7d`(按进程/按目的地)
+- [ ] 读库数据过 zod 校验(顺带复习 zod)
+
+**验收**:查询结果与 Phase 1 终端输出手工核对一致;`destinations.first_seen` 正确。
+
+## Phase 3 — 规则引擎 + 告警(1 天)
+
+- [ ] 三条规则:`new-destination` / `volume-threshold` / `unknown-process`(§6)
+- [ ] 白名单(进程 × 目的 IP),命中静默
+- [ ] 告警入库 + `notify-send` 桌面通知 + webhook
+- [ ] 类型化配置文件(zod 校验)
+
+**验收**:人为触发三条规则各一次(新目的地 / 大上传 / UNKNOWN)均收到通知并入库。
+
+## Phase 4 — Web 仪表盘(2~3 天)
+
+- [ ] Hono API:REST(SSE 实时流、Top、历史序列、告警/规则 CRUD,§5)+ zValidator
+- [ ] React 三视图:实时 / 历史 / 告警(线框见 §5.1,Recharts + 手写 CSS 深色主题)
+- [ ] `capabilities` 驱动的降级渲染(为 Windows 铺路,先做逻辑不做平台)
+- [ ] SSE 断线自动重连
+
+**验收**:浏览器实时刷新;历史图与 CLI 查询一致;断网 30s 恢复后 SSE 自动续上。
+
+## Phase 5 — 常驻 + 富化(1~2 天)
+
+- [ ] systemd 双 unit(collector 用 root,web 用普通用户,§7)
+- [ ] GeoLite2 本地库 → 归属地/ASN;反向 DNS 兜底
+- [ ] DNS 观察(本机可行路径,§3.3);目的地分类规则表(网盘/对象存储/AI 服务)
+- [ ] 日志 + 崩溃自恢复;`flow_minutes` 90 天清理任务
+- [ ] README(安装、运行、截图)
+
+**验收**:重启机器后自动恢复采集;仪表盘显示域名/归属地/分类徽标。
+
+## Phase 6~8 — 平台与精确化(主线完成后排期)
+
+- [ ] Phase 6:eBPF(Linux 精确统计,与 nethogs 交叉验证误差 < 5%)
+- [ ] Phase 7:macOS 适配器(`nettop -P -L`,同一接口跑通)
+- [ ] Phase 8:Windows ETW helper 评估 → 降级路径验证
+- [ ] 之后按 §11 功能池取用,优先:Beacon 检测 → 目的地画像页
+
+---
+
+## 依赖关系
+
+```
+Phase 0 ──→ 1 ──→ 2 ──→ 3 ──→ 4 ──→ 5 ──→ 6/7/8(可并行选做)
+                    │         │
+                    └─ 2、3 可与 4 的前端并行(接口定稿后)
+```
+
+## 当前状态
+
+- [x] 设计文档(design.md,含 §5.1 界面线框、§11 功能池)
+- [x] 开发计划(plan.md,本文件)
+- [ ] Phase 0 spike:契约定稿 + ss/DNS 结论已得;**剩采样一步**(终端执行 `sudo bash docs/samples/run-spike.sh`)
+- [ ] **→ Phase 1 骨架完成**(`npm run collector:mock` 可端到端体验;typecheck 常绿):剩样本校准解析器 → root 实测 30 分钟验收

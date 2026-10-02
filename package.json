@@ -1,0 +1,20 @@
+{
+  "name": "netwatch",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "collector": "tsx apps/collector/src/cli.ts",
+    "collector:mock": "tsx apps/collector/src/cli.ts --mock"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.3"
+  }
+}
