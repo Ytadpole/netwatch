@@ -61,7 +61,8 @@
 - [x] 环回代理两跳富化(§3.3.1,评审发现的告警污染问题先行解决):transit 识别(≥3 次字节相关命中确认)+ 两跳关联(±25% 字节/±5s 时窗)+ 规则引擎对 transit 进程豁免 new-destination;enrich.test.ts 4 项全过
 - [x] systemd 双 unit 文件(`deploy/`,collector root / web 普通用户,含路径与用户占位注释);安装启用与"重启自恢复"验收待 root 部署
 - [x] 反向 DNS 兜底(§3.3 优先级 3):`revdns.ts`(正/负缓存 6h、并发上限、超时负缓存、resolver 可注入);domain 落 `flow_minutes` 与 `destinations`(仅空值回填),查询侧 `COALESCE(维表, 分钟行)`
-- [ ] GeoLite2 本地库 → 归属地/ASN(需要用户提供 GeoLite2 库文件);DNS 观察(§3.3 优先级 1/2,需 root);目的地分类规则表(网盘/对象存储/AI 服务)
+- [x] 目的地分类规则表(§11 静态表先行):shared/classify.ts,AI/网盘/对象存储后缀匹配(优先级 ai → 网盘 → 对象存储,泛云域启发式),topDestinations 输出 category,CLI 归属列与 Web 历史视图徽标;classify.test.ts 4 项
+- [ ] GeoLite2 本地库 → 归属地/ASN(需要用户提供 GeoLite2 库文件);DNS 观察(§3.3 优先级 1/2,需 root)
 - [x] `flow_minutes` 90 天清理任务(采集端每小时 `pruneOlderThan(90)`,destinations 维表保留)
 - [x] README(安装、运行、systemd 部署、数据与隐私说明);截图待真实数据落地后补
 

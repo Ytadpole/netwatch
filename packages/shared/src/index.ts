@@ -4,3 +4,4 @@ export * from "./schemas.js";
 export * from "./paths.js";
 export * from "./rules-config.js";
 export * from "./query.js";
+export * from "./classify.js";

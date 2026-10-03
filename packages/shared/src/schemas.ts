@@ -58,6 +58,8 @@ export const TopDestinationRowSchema = z.object({
   country: z.string().nullable().optional(),
   asn: z.string().nullable().optional(),
   firstSeen: z.number().int().nonnegative().nullable().optional(),
+  /** 静态规则表分类(§11;由 domain 查询时计算,未知不输出) */
+  category: z.enum(["ai", "cloud-storage", "object-storage"]).optional(),
   totalSent: z.number().int().nonnegative(),
   totalRecv: z.number().int().nonnegative(),
   peakMinuteSent: z.number().int().nonnegative(),

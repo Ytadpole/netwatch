@@ -4,6 +4,7 @@ import type { Range } from "../api.js";
 import { fetchHistory, fetchTopDestinations, fetchTopProcesses, type HistorySeries } from "../api.js";
 import { colorFor, fmtBytes, fmtClock } from "../format.js";
 import type { TopDestinationRow, TopProcessRow } from "@netwatch/shared";
+import { CATEGORY_LABELS } from "@netwatch/shared/classify";
 
 const RANGES: Range[] = ["1h", "24h", "7d"];
 
@@ -117,6 +118,7 @@ export function HistoryView({ initialRange }: { initialRange: Range }) {
                   <td>
                     {r.remoteIp}
                     {r.domain !== undefined ? <span className="muted"> · {r.domain}</span> : null}
+                    {r.category !== undefined ? <span className="badge">{CATEGORY_LABELS[r.category]}</span> : null}
                   </td>
                   <td className="num">{fmtBytes(r.totalSent)}</td>
                   <td className="num">{r.firstSeen != null ? fmtClock(r.firstSeen) : "—"}</td>

@@ -1,5 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { TopProcessRowSchema, TopDestinationRowSchema, type TopProcessRow, type TopDestinationRow } from "./schemas.js";
+import { classifyDomain } from "./classify.js";
 
 /**
  * 读库查询(Phase 2):展示侧入口,普通用户即可读。
@@ -93,6 +94,7 @@ export function topDestinations(opts: TopOptions): TopDestinationRow[] {
         country: r.country === null || r.country === undefined ? undefined : String(r.country),
         asn: r.asn === null || r.asn === undefined ? undefined : String(r.asn),
         firstSeen: r.first_seen === null || r.first_seen === undefined ? undefined : Number(r.first_seen),
+        category: classifyDomain(r.domain === null || r.domain === undefined ? undefined : String(r.domain)),
         totalSent: Number(r.total_sent),
         totalRecv: Number(r.total_recv),
         peakMinuteSent: Number(r.peak_minute_sent),

@@ -3,7 +3,7 @@
  * netwatch-query(Phase 2):读库查询 CLI,普通用户即可运行。
  * 用法:tsx src/query-cli.ts top <10m|1h|24h|7d> [--by=process|destination] [--db=path] [--limit=20]
  */
-import { topProcesses, topDestinations } from "@netwatch/shared";
+import { topProcesses, topDestinations, CATEGORY_LABELS } from "@netwatch/shared";
 import { defaultDbPath } from "./store.js";
 import { fmtBytes, fmtClock } from "./render.js";
 import { isLan, isLoopback } from "./aggregate.js";
@@ -55,7 +55,8 @@ if (by === "process") {
   for (const [i, r] of rows.entries()) {
     const badge = isLoopback(r.remoteIp) ? " [代理]" : isLan(r.remoteIp) ? " [局域网]" : "";
     const dest = `${r.remoteIp}${badge}`;
-    const belong = [r.domain, r.country].filter((v): v is string => v != null && v !== "").join(" · ") || "—";
+    const cat = r.category !== undefined ? CATEGORY_LABELS[r.category] : undefined;
+    const belong = [cat, r.domain, r.country].filter((v): v is string => v != null && v !== "").join(" · ") || "—";
     const firstSeen = r.firstSeen != null ? fmtClock(r.firstSeen) : "—";
     console.log(
       `${String(i + 1).padEnd(4)}${dest.padEnd(24).slice(0, 24)}${belong.padEnd(20).slice(0, 20)}${fmtBytes(r.totalSent).padStart(12)}${fmtBytes(r.totalRecv).padStart(12)}${firstSeen.padStart(12)}`,
