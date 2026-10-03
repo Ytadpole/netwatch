@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { TopProcessRowSchema, TopDestinationRowSchema, type TopProcessRow, type TopDestinationRow } from "@netwatch/shared";
+import { TopProcessRowSchema, TopDestinationRowSchema, type TopProcessRow, type TopDestinationRow } from "./schemas.js";
 
 /**
  * 读库查询(Phase 2):展示侧入口,普通用户即可读。

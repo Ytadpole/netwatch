@@ -10,6 +10,8 @@
  *   --no-db / --no-rules  分别关闭落库 / 规则引擎
  */
 import type { TrafficSource } from "@netwatch/shared";
+import { defaultRulesPath } from "@netwatch/shared";
+import { existsSync } from "node:fs";
 import { createTrafficSource, NethogsSourceError } from "./sources/index.js";
 import { RollingAggregator } from "./aggregate.js";
 import { renderSnapshot, YELLOW, RESET } from "./render.js";
@@ -48,10 +50,13 @@ if (!noDb) {
 let storeErrorLogged = false;
 
 // 规则引擎(Phase 3):依赖落库的 destinations 表做首见判定,故跟随 store 存在与否
+// 配置来源:--rules=path > 默认路径文件(~/.config/netwatch/rules.json,存在即加载)> 内置默认;SIGHUP 热重载
 let engine: RuleEngine | null = null;
+let rulesPath: string | undefined = rulesArg?.slice(8);
+if (rulesPath === undefined && existsSync(defaultRulesPath())) rulesPath = defaultRulesPath();
 if (!noRules && store !== null) {
   try {
-    const rulesConfig = loadRulesConfig(rulesArg?.slice(8));
+    const rulesConfig = loadRulesConfig(rulesPath);
     const notifiers = [
       rulesConfig.notify.desktop ? desktopNotifier() : null,
       rulesConfig.notify.webhookUrl !== undefined ? webhookNotifier(rulesConfig.notify.webhookUrl) : null,
@@ -61,6 +66,15 @@ if (!noRules && store !== null) {
     console.error(`⚠ 规则引擎未启用:${err instanceof Error ? err.message : String(err)}`);
   }
 }
+process.on("SIGHUP", () => {
+  if (engine === null) return;
+  try {
+    engine.updateConfig(loadRulesConfig(rulesPath));
+    console.error("↻ 规则配置已重载(SIGHUP)");
+  } catch (err) {
+    console.error(`⚠ 规则配置重载失败:${err instanceof Error ? err.message : String(err)}`);
+  }
+});
 
 let source: TrafficSource;
 try {
@@ -86,7 +100,10 @@ const timer = setInterval(() => {
     }
   }
   if (clearScreen) process.stdout.write("\x1b[2J\x1b[H");
-  process.stdout.write(renderSnapshot(agg.snapshot(), { mock }));
+  const snap = agg.snapshot();
+  // §5 进程间通道:实时快照高频覆盖写库,展示端只读轮询(SSE 推浏览器)
+  store?.writeLiveSnapshot({ ...snap, capabilities: source.capabilities }, snap.at);
+  process.stdout.write(renderSnapshot(snap, { mock }));
 }, 1_000);
 
 void (async () => {

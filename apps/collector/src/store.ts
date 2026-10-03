@@ -1,5 +1,4 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite";
-import { homedir } from "node:os";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
@@ -26,10 +25,8 @@ export interface DestinationSighting {
 
 export const PID_SENTINEL = -1; // flow.pid=null → -1(进程名已知、PID 缺失)
 
-export function defaultDbPath(): string {
-  const base = process.env.XDG_DATA_HOME || path.join(homedir(), ".local", "share");
-  return path.join(base, "netwatch", "netwatch.db");
-}
+// defaultDbPath 上移到 @netwatch/shared(两进程共用同一默认路径);此处保持再导出兼容
+export { defaultDbPath } from "@netwatch/shared";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS flow_minutes (
@@ -57,6 +54,12 @@ CREATE TABLE IF NOT EXISTS alerts (
   severity TEXT,
   detail JSON
 );
+-- 实时快照(§5 进程间通道):采集端高频整行覆盖,展示端只读轮询后经 SSE 推浏览器
+CREATE TABLE IF NOT EXISTS live_snapshot (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  at INTEGER NOT NULL,
+  json TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_flow_minutes_minute ON flow_minutes(minute);
 `;
 
@@ -66,6 +69,7 @@ export class Store {
   private readonly stmtDestination: StatementSync;
   private readonly stmtDestFirstSeen: StatementSync;
   private readonly stmtAlertInsert: StatementSync;
+  private readonly stmtLiveSnapshot: StatementSync;
 
   constructor(dbPath: string) {
     if (dbPath !== ":memory:") {
@@ -87,6 +91,10 @@ export class Store {
     `);
     this.stmtDestFirstSeen = this.db.prepare("SELECT first_seen FROM destinations WHERE remote_ip = ?");
     this.stmtAlertInsert = this.db.prepare("INSERT INTO alerts (at, rule, severity, detail) VALUES (?, ?, ?, ?)");
+    this.stmtLiveSnapshot = this.db.prepare(`
+      INSERT INTO live_snapshot (id, at, json) VALUES (1, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET at = excluded.at, json = excluded.json
+    `);
   }
 
   /** 整分钟桶落库;同一桶重复 flush 以最新值覆盖(幂等) */
@@ -103,6 +111,11 @@ export class Store {
         r.recv,
       );
     }
+  }
+
+  /** 实时快照(§5):采集端每采样周期覆盖写,展示端轮询此行 */
+  writeLiveSnapshot(payload: unknown, at: number): void {
+    this.stmtLiveSnapshot.run(at, JSON.stringify(payload));
   }
 
   /** 首见目的地;已存在则保留最早的 first_seen(富化列 Phase 5 补写) */

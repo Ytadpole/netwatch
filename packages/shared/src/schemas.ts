@@ -63,3 +63,35 @@ export const TopDestinationRowSchema = z.object({
   peakMinuteSent: z.number().int().nonnegative(),
 });
 export type TopDestinationRow = z.infer<typeof TopDestinationRowSchema>;
+
+/** 实时快照(§5 进程间通道):采集端写 live_snapshot 行,Web 端读出经 SSE 推浏览器 */
+export const LiveDestSchema = z.object({
+  remoteIp: z.string(),
+  remotePort: z.number().int(),
+  sentRate: z.number(),
+  recvRate: z.number(),
+  share: z.number(),
+  lan: z.boolean(),
+  loopback: z.boolean(),
+  isNew: z.boolean(),
+});
+export type LiveDest = z.infer<typeof LiveDestSchema>;
+
+export const LiveProcessSchema = z.object({
+  process: z.string(),
+  pid: z.number().int().nullable(),
+  unattributed: z.boolean(),
+  sentRate: z.number(),
+  recvRate: z.number(),
+  destinations: z.array(LiveDestSchema),
+});
+export type LiveProcess = z.infer<typeof LiveProcessSchema>;
+
+export const LivePayloadSchema = z.object({
+  at: z.number().int(),
+  totalSentRate: z.number(),
+  totalRecvRate: z.number(),
+  processes: z.array(LiveProcessSchema),
+  capabilities: z.object({ perProcessBytes: z.boolean(), dnsObservation: z.boolean() }),
+});
+export type LivePayload = z.infer<typeof LivePayloadSchema>;

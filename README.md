@@ -73,6 +73,10 @@ npm test
 # 全部包严格 TS 校验
 npm run typecheck
 
+# Web 仪表盘(展示端,普通用户):构建前端后启动 Hono 服务,浏览器打开 http://127.0.0.1:8787
+npm run web:build
+npm run web            # 环境变量 NETWATCH_DB 指定库路径,默认 ~/.local/share/netwatch/netwatch.db
+
 # Phase 0 spike:采样 nethogs 真实输出(5.5 分钟,自动装 nethogs、注入测试流量;需 root)
 sudo bash docs/samples/run-spike.sh
 
@@ -80,7 +84,7 @@ sudo bash docs/samples/run-spike.sh
 # sudo npm run collector
 ```
 
-Web 仪表盘将在 Phase 4 落地,届时补充安装与运行说明。
+仪表盘三视图(实时/历史/告警):实时视图由采集端高频写入的快照经 SSE 推送;告警视图可编辑白名单(进程 × 目的 IP),阈值/通知走 JSON 配置(`NETWATCH_RULES`,缺省 `~/.config/netwatch/rules.json`,采集端收到 SIGHUP 热重载)。
 
 ## 文档
 

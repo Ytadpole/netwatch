@@ -49,12 +49,12 @@
 
 ## Phase 4 — Web 仪表盘(2~3 天)
 
-- [ ] Hono API:REST(SSE 实时流、Top、历史序列、告警/规则 CRUD,§5)+ zValidator
-- [ ] React 三视图:实时 / 历史 / 告警(线框见 §5.1,Recharts + 手写 CSS 深色主题)
-- [ ] `capabilities` 驱动的降级渲染(为 Windows 铺路,先做逻辑不做平台)
-- [ ] SSE 断线自动重连
+- [x] Hono API:REST(SSE 实时流、Top、历史序列、告警/规则 CRUD,§5)+ zValidator(`apps/web/src/server.ts`;实时通道按 §5:采集端高频写 `live_snapshot` 行,Web 只读轮询后 SSE 推浏览器,采集端不开端口)
+- [x] React 三视图:实时 / 历史 / 告警(线框见 §5.1,Recharts 堆叠面积图 + 手写 CSS 深色主题;URL 即状态 `?view=history&…`)
+- [x] `capabilities` 驱动的降级渲染(先做逻辑不做平台:`perProcessBytes=false` 时隐藏速率列/图表)
+- [x] SSE 断线自动重连(EventSource 原生重连 + 快照 >5s 视为离线的陈旧检测)
 
-**验收**:浏览器实时刷新;历史图与 CLI 查询一致;断网 30s 恢复后 SSE 自动续上。
+**验收**:浏览器实时刷新 ✓(mock 数据实况截图核对三视图);历史图与 CLI 查询一致 ✓(series 合计 60369961 = 库内直查 SUM,精确相等);断网 30s 恢复后 SSE 自动续上 ✓(重启 web 进程后页面自动回到"已连接")。真实 nethogs 数据下的最终确认随 Phase 1 收口。
 
 ## Phase 5 — 常驻 + 富化(1~2 天)
 
@@ -90,4 +90,4 @@ Phase 0 ──→ 1 ──→ 2 ──→ 3 ──→ 4 ──→ 5 ──→ 6/
 - [ ] Phase 0 spike:契约定稿 + ss/DNS 结论已得;**剩采样一步**(终端执行 `sudo bash docs/samples/run-spike.sh`)
 - [ ] Phase 1 骨架完成(mock 端到端):剩样本校准解析器 → root 实测 30 分钟验收
 - [x] Phase 2 完成(mock 数据验证):SQLite 落库 + 查询 CLI + zod 校验;真实数据核对随 Phase 1 收口
-- [ ] **→ Phase 3 完成**:规则引擎三规则 + 白名单 + 通知 + zod 配置(node:test 4/4 过);下一步 Phase 4 Web 仪表盘
+- [ ] **→ Phase 4 完成**:Hono API + React 三视图 + SSE 重连(浏览器实况验证);下一步 Phase 5 常驻 + 富化

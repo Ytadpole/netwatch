@@ -8,7 +8,7 @@
   - [docs/design.md](docs/design.md) — 设计全文。重点:§3 采集层(TrafficSource 契约)、§4 数据模型、§5 Web/API(§5.1 界面线框)、§6 规则引擎、§11 功能池。
   - [docs/plan.md](docs/plan.md) — Phase 0~8 计划,每个 Phase 末尾有验收标准。
   - [docs/samples/spike-notes.md](docs/samples/spike-notes.md) — spike 结论:数据源可行性、契约定稿决策、已知坑。
-- 工作按 Phase 推进,**Phase 0 差采样一步**(sudo 脚本由用户终端执行),**Phase 1~3 骨架已完成**(mock 全链路:采集 → 落库 → 查询 → 规则告警;解析器待样本校准,root 实测验收未做)。开工前确认上一 Phase 验收已达成;完成事项勾掉 plan.md 复选框并更新其「当前状态」。
+- 工作按 Phase 推进,**Phase 0 差采样一步**(sudo 脚本由用户终端执行),**Phase 1~4 骨架已完成**(mock 全链路:采集 → 落库 → 查询 → 规则告警 → Web 仪表盘;解析器待样本校准,root 实测验收未做)。开工前确认上一 Phase 验收已达成;完成事项勾掉 plan.md 复选框并更新其「当前状态」。
 
 ## 命令
 
@@ -16,9 +16,16 @@
   - `npm run typecheck` — 全部包 strict TS 校验,必须常绿。
   - `npm run collector:mock` — mock 源跑采集 CLI,无需 root;`npm run collector` 为真实 nethogs 源,需要 root。
   - `npm run query -- top 1h [--by=destination]` — 读库查询 CLI,普通用户。
+  - `npm run web:build && npm run web` — 构建并启动 Web 仪表盘(http://127.0.0.1:8787;`NETWATCH_DB`/`NETWATCH_RULES`/`NETWATCH_WEB_PORT` 可覆盖)。
   - `npm test` — collector 测试(node:test 经 tsx;规则引擎/落库断言)。
   - 需要改系统状态的只有 spike 采样脚本(装 nethogs、root 抓包),由用户自己在终端跑,agent 不要尝试 sudo。
-- 无构建产物,运行经 tsx;运行期目录仅 `packages/shared` 与 `apps/collector`(web 包 Phase 4 建)。
+- 前端构建产物仅 `apps/web/dist`(Vite,gitignore 之外需提交与否随 Phase 5 定);其余运行经 tsx。
+
+## 进程间通道(§5,改代码前必读)
+
+- 采集端(root)每秒把实时快照整行覆盖写进 `live_snapshot` 表;Web 端只读轮询该行,经 SSE 推浏览器——**采集端不开任何网络端口**。
+- 规则配置文件(`~/.config/netwatch/rules.json`)由 Web 端写(白名单 CRUD)、采集端读(SIGHUP 热重载);两进程通过 `@netwatch/shared` 的 `RulesFileSchema`/`mergeRulesFile` 共享契约。
+- SQLite(WAL)是两进程唯一耦合点:采集端只写,Web 端 `readOnly` 打开。
 
 ## 约定的仓库结构(Phase 1 时初始化)
 

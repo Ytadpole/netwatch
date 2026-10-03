@@ -12,7 +12,9 @@
     "test": "npm run test --workspaces --if-present",
     "collector": "tsx apps/collector/src/cli.ts",
     "collector:mock": "tsx apps/collector/src/cli.ts --mock",
-    "query": "tsx apps/collector/src/query-cli.ts"
+    "query": "tsx apps/collector/src/query-cli.ts",
+    "web:build": "npm run build --workspace @netwatch/web",
+    "web": "tsx apps/web/src/server.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

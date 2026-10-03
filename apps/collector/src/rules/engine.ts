@@ -55,11 +55,16 @@ export class RuleEngine {
 
   constructor(
     private readonly store: Store | null,
-    private readonly config: RulesConfig,
+    private config: RulesConfig,
     private readonly notifiers: Notifier[] = [],
     opts: RuleEngineOptions = {},
   ) {
     this.intervalSec = opts.intervalSec ?? 2;
+  }
+
+  /** 配置热更新(SIGHUP / Web 端改白名单后触发) */
+  updateConfig(config: RulesConfig): void {
+    this.config = config;
   }
 
   /** 处理一个事件,返回本次触发的告警(副作用:入库 + 通知) */

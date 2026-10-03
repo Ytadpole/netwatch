@@ -3,7 +3,7 @@
  * netwatch-query(Phase 2):读库查询 CLI,普通用户即可运行。
  * 用法:tsx src/query-cli.ts top <10m|1h|24h|7d> [--by=process|destination] [--db=path] [--limit=20]
  */
-import { topProcesses, topDestinations } from "./query.js";
+import { topProcesses, topDestinations } from "@netwatch/shared";
 import { defaultDbPath } from "./store.js";
 import { fmtBytes, fmtClock } from "./render.js";
 import { isLan, isLoopback } from "./aggregate.js";
