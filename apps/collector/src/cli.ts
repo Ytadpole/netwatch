@@ -13,9 +13,10 @@ import type { TrafficSource } from "@netwatch/shared";
 import { defaultRulesPath } from "@netwatch/shared";
 import { existsSync } from "node:fs";
 import { createTrafficSource, NethogsSourceError } from "./sources/index.js";
-import { RollingAggregator } from "./aggregate.js";
+import { RollingAggregator, isLoopback } from "./aggregate.js";
 import { renderSnapshot, YELLOW, RESET } from "./render.js";
 import { Enricher } from "./enrich.js";
+import { ReverseDns } from "./revdns.js";
 import { Store, defaultDbPath } from "./store.js";
 import { loadRulesConfig } from "./rules/config.js";
 import { RuleEngine } from "./rules/engine.js";
@@ -49,6 +50,7 @@ if (!noDb) {
   }
 }
 let storeErrorLogged = false;
+let lastPruneAt = 0;
 
 // 规则引擎(Phase 3):依赖落库的 destinations 表做首见判定,故跟随 store 存在与否
 // 配置来源:--rules=path > 默认路径文件(~/.config/netwatch/rules.json,存在即加载)> 内置默认;SIGHUP 热重载
@@ -86,6 +88,8 @@ try {
 
 // 富化器(§3.3.1):代理 transit 识别 + 两跳关联,附加推断字段不改归因事实
 const enricher = new Enricher();
+// 反向 DNS 兜底(§3.3 优先级 3):活跃公网远端 → 域名,落库时打在行上
+const revdns = new ReverseDns();
 
 let stopped = false;
 const timer = setInterval(() => {
@@ -94,8 +98,23 @@ const timer = setInterval(() => {
   if (store !== null) {
     try {
       const { minutes, newDestinations } = agg.drainClosedMinutes(Date.now());
-      for (const m of minutes) store.flushMinute(m.minute, m.rows);
-      if (newDestinations.length > 0) store.recordDestinations(newDestinations);
+      const withDomain = <T extends { remoteIp: string }>(r: T): T & { domain?: string } => {
+        const d = revdns.domainOf(r.remoteIp);
+        return d === undefined ? r : { ...r, domain: d };
+      };
+      for (const m of minutes) {
+        store.flushMinute(m.minute, m.rows.map(withDomain));
+      }
+      if (newDestinations.length > 0) {
+        store.recordDestinations(newDestinations.map(withDomain));
+      }
+      // 90 天清理(§9):每小时最多跑一次
+      const now = Date.now();
+      if (now - lastPruneAt > 3_600_000) {
+        lastPruneAt = now;
+        const n = store.pruneOlderThan(90, now);
+        if (n > 0) console.error(`🧹 已清理 90 天前的 flow_minutes 明细:${n} 行`);
+      }
     } catch (err) {
       if (!storeErrorLogged) {
         storeErrorLogged = true;
@@ -114,6 +133,7 @@ void (async () => {
   try {
     for await (const ev of source.events()) {
       const enriched = enricher.process(ev);
+      if (enriched.kind === "flow" && !isLoopback(enriched.remoteIp)) revdns.observe(enriched.remoteIp);
       agg.push(enriched);
       if (engine !== null) {
         for (const a of engine.process(enriched)) {

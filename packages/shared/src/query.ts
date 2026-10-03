@@ -70,12 +70,13 @@ export function topDestinations(opts: TopOptions): TopDestinationRow[] {
     const raw = db
       .prepare(
         `SELECT f.remote_ip             AS remote_ip,
-                d.domain, d.country, d.asn, d.first_seen,
+                COALESCE(d.domain, MAX(f.f_domain)) AS domain,
+                d.country, d.asn, d.first_seen,
                 SUM(f.min_sent)         AS total_sent,
                 SUM(f.min_recv)         AS total_recv,
                 MAX(f.min_sent)         AS peak_minute_sent
          FROM (
-           SELECT minute, remote_ip, SUM(sent) AS min_sent, SUM(recv) AS min_recv
+           SELECT minute, remote_ip, SUM(sent) AS min_sent, SUM(recv) AS min_recv, MAX(domain) AS f_domain
            FROM flow_minutes WHERE minute >= ?
            GROUP BY minute, remote_ip
          ) f

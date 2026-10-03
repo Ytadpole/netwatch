@@ -4,7 +4,7 @@
 
 进程级上传监控仪表盘:本机常驻采集 + Web 实时查看 + 异常上传告警。检测靠**行为元数据**(谁、何时、何地、多少)——不做内容审计,不做 MITM,不做拦截,只观测和告警。
 
-**状态:开发初期(Phase 0)**。设计与计划已完成,代码正在落地,安装与使用命令以实际发布为准;当前可跑的内容见[快速开始](#快速开始)。
+**状态:主线 Phase 0~4 代码完成(mock 全链路验证),Phase 5 进行中**;真实数据验收待 spike 采样。当前可跑的内容见[快速开始](#快速开始)。
 
 ## 它回答四个问题
 
@@ -86,6 +86,33 @@ sudo bash docs/samples/run-spike.sh
 
 仪表盘三视图(实时/历史/告警):实时视图由采集端高频写入的快照经 SSE 推送;告警视图可编辑白名单(进程 × 目的 IP),阈值/通知走 JSON 配置(`NETWATCH_RULES`,缺省 `~/.config/netwatch/rules.json`,采集端收到 SIGHUP 热重载)。
 
+## 部署(systemd 常驻)
+
+单机部署 = 两个服务:**采集端**(root,只写库不开端口)+ **展示端**(普通用户,只读库),SQLite 是唯一耦合点。
+
+```bash
+# 1. 代码放 /opt/netwatch(或改 unit 文件里的 WorkingDirectory),安装依赖并构建前端
+sudo rsync -a ./ /opt/netwatch/ --exclude node_modules --exclude .git
+cd /opt/netwatch && sudo npm install && sudo npm run web:build
+
+# 2. 安装并启用两个 unit(User=、WorkingDirectory=、node 路径按实际情况改)
+sudo cp deploy/netwatch-collector.service deploy/netwatch-web.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now netwatch-collector netwatch-web
+
+# 3. 状态与日志
+journalctl -u netwatch-collector -f
+journalctl -u netwatch-web -f
+```
+
+`enable --now` + `Restart=always`:重启机器后两服务自动恢复。
+
+## 数据
+
+- 数据库:`~/.local/share/netwatch/netwatch.db`(WAL);采集端 root 写、展示端只读;明细默认保留 90 天,采集端每小时自动清理。
+- 规则配置:`~/.config/netwatch/rules.json`。
+- 域名富化:对本机活跃远端做反向 DNS(普通 DNS 查询),正/负结果缓存 6 小时。
+
 ## 文档
 
 - [docs/design.md](docs/design.md) — 设计全文:采集层、数据模型、规则引擎、界面线框、功能池
@@ -106,4 +133,4 @@ sudo bash docs/samples/run-spike.sh
 
 ## 隐私
 
-netwatch 只记录连接元数据(IP、域名、字节数、时间),不接触任何传输内容;GeoIP/ASN 查询全部使用本地库文件,netwatch 自身不向外发起查询。所有数据存本机单个 SQLite 文件。
+netwatch 只记录连接元数据(IP、域名、字节数、时间),不接触任何传输内容;GeoIP/ASN 查询全部使用本地库文件,netwatch 自身不发起在线 GeoIP 查询(域名走本机 DNS 的反向解析兜底)。所有数据存本机单个 SQLite 文件。

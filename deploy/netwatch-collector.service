@@ -1,0 +1,23 @@
+# 采集端(需 root):解析器抓包 + 落库 + 规则告警;不开任何网络端口
+# 安装:sudo cp deploy/netwatch-collector.service /etc/systemd/system/
+#      (先按实际仓库路径/Node 路径改 WorkingDirectory 与 ExecStart)
+[Unit]
+Description=netwatch collector - 进程级上传采集(root)
+Documentation=https://github.com/Ytadpole/netwatch
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 按实际安装路径调整;node 路径用 `which node` 确认(nvm 安装时不是 /usr/bin/node)
+WorkingDirectory=/opt/netwatch
+ExecStart=/usr/bin/env node --import tsx apps/collector/src/cli.ts
+Restart=always
+RestartSec=5
+# 日志进 journald:journalctl -u netwatch-collector -f
+StandardOutput=journal
+StandardError=journal
+# 告警桌面通知在无图形会话下自动跳过,无需配置 DISPLAY
+
+[Install]
+WantedBy=multi-user.target

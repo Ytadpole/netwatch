@@ -1,0 +1,24 @@
+# 展示端(普通用户):Hono API + SSE + 静态仪表盘;只读打开 SQLite
+# 安装:sudo cp deploy/netwatch-web.service /etc/systemd/system/
+#      (改 User= 为你的登录用户;先 npm run web:build 生成前端产物)
+[Unit]
+Description=netwatch web - 上传监控仪表盘(普通用户)
+Documentation=https://github.com/Ytadpole/netwatch
+After=network-online.target netwatch-collector.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 改成你的登录用户;同一机器上与采集端通过 SQLite 文件耦合,无需其他配置
+User=YOUR_USER
+WorkingDirectory=/opt/netwatch
+ExecStart=/usr/bin/env node --import tsx apps/web/src/server.ts
+Restart=always
+RestartSec=5
+Environment=NETWATCH_WEB_PORT=8787
+# 可选覆盖:NETWATCH_DB / NETWATCH_RULES
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

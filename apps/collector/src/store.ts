@@ -15,12 +15,16 @@ export interface MinuteRow {
   remotePort: number;
   sent: number;
   recv: number;
+  /** 反向 DNS 富化(可选,未知留空) */
+  domain?: string;
 }
 
 export interface DestinationSighting {
   remoteIp: string;
   /** 事件时刻(毫秒),非落盘时刻 */
   firstSeen: number;
+  /** 反向 DNS 富化(可选;已存在行仅在其 domain 为空时回填) */
+  domain?: string;
 }
 
 export const PID_SENTINEL = -1; // flow.pid=null → -1(进程名已知、PID 缺失)
@@ -81,13 +85,14 @@ export class Store {
     this.db.exec(SCHEMA);
     this.stmtFlush = this.db.prepare(`
       INSERT INTO flow_minutes (minute, kind, pid, process, remote_ip, remote_port, domain, country, asn, sent, recv)
-      VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
       ON CONFLICT(minute, kind, pid, process, remote_ip, remote_port)
       DO UPDATE SET sent = excluded.sent, recv = excluded.recv
     `);
     this.stmtDestination = this.db.prepare(`
-      INSERT INTO destinations (remote_ip, first_seen) VALUES (?, ?)
-      ON CONFLICT(remote_ip) DO NOTHING
+      INSERT INTO destinations (remote_ip, first_seen, domain) VALUES (?, ?, ?)
+      ON CONFLICT(remote_ip) DO UPDATE SET
+        domain = COALESCE(destinations.domain, excluded.domain)
     `);
     this.stmtDestFirstSeen = this.db.prepare("SELECT first_seen FROM destinations WHERE remote_ip = ?");
     this.stmtAlertInsert = this.db.prepare("INSERT INTO alerts (at, rule, severity, detail) VALUES (?, ?, ?, ?)");
@@ -107,6 +112,7 @@ export class Store {
         r.kind === "unknown-flow" ? "" : r.process,
         r.remoteIp,
         r.remotePort,
+        r.domain ?? null,
         r.sent,
         r.recv,
       );
@@ -118,11 +124,18 @@ export class Store {
     this.stmtLiveSnapshot.run(at, JSON.stringify(payload));
   }
 
-  /** 首见目的地;已存在则保留最早的 first_seen(富化列 Phase 5 补写) */
+  /** 首见目的地;保留最早的 first_seen,domain 允许后补(原值为空才覆盖) */
   recordDestinations(sightings: DestinationSighting[]): void {
     for (const s of sightings) {
-      this.stmtDestination.run(s.remoteIp, s.firstSeen);
+      this.stmtDestination.run(s.remoteIp, s.firstSeen, s.domain ?? null);
     }
+  }
+
+  /** 90 天清理(§9 磁盘增长对策):删除 minute 早于 days 天前的明细行,返回删除行数 */
+  pruneOlderThan(days: number, now: number = Date.now()): number {
+    const cutoff = Math.floor(now / 60_000) * 60_000 - days * 86_400_000;
+    const r = this.db.prepare("DELETE FROM flow_minutes WHERE minute < ?").run(cutoff);
+    return Number(r.changes);
   }
 
   /** 目的地首见查询(规则引擎 new-destination 判定用);无记录返回 null */
