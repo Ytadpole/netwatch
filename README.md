@@ -63,6 +63,13 @@ npm run collector:mock
 npm run query -- top 1h                      # 按进程
 npm run query -- top 24h --by=destination    # 按目的地
 
+# 测试(规则引擎与落库)
+npm test
+
+# 规则阈值 / 白名单 / 通知走 JSON 配置(--rules=path),缺省用内置默认:
+# { "whitelist": [{ "process": "nextcloud-sync", "remoteIp": "192.168.1.10" }],
+#   "notify": { "webhookUrl": "https://example/hook" } }
+
 # 全部包严格 TS 校验
 npm run typecheck
 

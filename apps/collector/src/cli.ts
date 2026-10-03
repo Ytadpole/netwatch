@@ -1,16 +1,22 @@
 #!/usr/bin/env node
 /**
- * netwatch-collector CLI(Phase 1):实时打印"谁在传",信息密度对齐 design.md §5.1 实时视图。
- * 用法:tsx src/cli.ts [--mock] [--delay=2] [--no-clear]
- *   --mock       mock 数据源(无需 root,开发/演示)
+ * netwatch-collector CLI(Phase 1~3):实时打印"谁在传" + 落库 + 规则告警(§5.1/§6)。
+ * 用法:tsx src/cli.ts [--mock] [--delay=2] [--no-clear] [--no-db] [--db=path] [--rules=path] [--no-rules]
+ *   --mock       mock 数据源(无需 root,开发/演示;默认内存库)
  *   --delay=N    nethogs 采样间隔秒数(默认 2)
  *   --no-clear   不清屏,追加式输出(便于重定向观察)
+ *   --db=path    落库路径(真实源默认 XDG 数据目录 ~/.local/share/netwatch/netwatch.db)
+ *   --rules=path 规则配置 JSON(缺省用 §6 内置默认阈值)
+ *   --no-db / --no-rules  分别关闭落库 / 规则引擎
  */
 import type { TrafficSource } from "@netwatch/shared";
 import { createTrafficSource, NethogsSourceError } from "./sources/index.js";
 import { RollingAggregator } from "./aggregate.js";
-import { renderSnapshot } from "./render.js";
+import { renderSnapshot, YELLOW, RESET } from "./render.js";
 import { Store, defaultDbPath } from "./store.js";
+import { loadRulesConfig } from "./rules/config.js";
+import { RuleEngine } from "./rules/engine.js";
+import { desktopNotifier, webhookNotifier } from "./rules/notify.js";
 
 const argv = process.argv.slice(2);
 const mock = argv.includes("--mock");
@@ -19,6 +25,8 @@ const delayArg = argv.find((a) => a.startsWith("--delay="));
 const delaySec = delayArg ? Number(delayArg.slice("--delay=".length)) || 2 : 2;
 const noDb = argv.includes("--no-db");
 const dbArg = argv.find((a) => a.startsWith("--db="));
+const rulesArg = argv.find((a) => a.startsWith("--rules="));
+const noRules = argv.includes("--no-rules");
 
 function fail(msg: string): never {
   console.error(msg);
@@ -38,6 +46,22 @@ if (!noDb) {
   }
 }
 let storeErrorLogged = false;
+
+// 规则引擎(Phase 3):依赖落库的 destinations 表做首见判定,故跟随 store 存在与否
+let engine: RuleEngine | null = null;
+if (!noRules && store !== null) {
+  try {
+    const rulesConfig = loadRulesConfig(rulesArg?.slice(8));
+    const notifiers = [
+      rulesConfig.notify.desktop ? desktopNotifier() : null,
+      rulesConfig.notify.webhookUrl !== undefined ? webhookNotifier(rulesConfig.notify.webhookUrl) : null,
+    ].filter((n): n is NonNullable<typeof n> => n !== null);
+    engine = new RuleEngine(store, rulesConfig, notifiers, { intervalSec: delaySec });
+  } catch (err) {
+    console.error(`⚠ 规则引擎未启用:${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 let source: TrafficSource;
 try {
   source = createTrafficSource({ mock });
@@ -69,6 +93,11 @@ void (async () => {
   try {
     for await (const ev of source.events()) {
       agg.push(ev);
+      if (engine !== null) {
+        for (const a of engine.process(ev)) {
+          console.error(`${YELLOW}🔔 [${a.severity}] ${a.rule}${RESET} ${a.detail.message}${RESET}`);
+        }
+      }
     }
   } catch (err) {
     stopped = true;
@@ -98,4 +127,4 @@ function shutdown(): void {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
-console.error(`netwatch collector 启动中(源:${mock ? "mock" : `nethogs ${delaySec}s`} · 库:${noDb ? "关闭" : dbPath} · Ctrl+C 退出)…`);
+console.error(`netwatch collector 启动中(源:${mock ? "mock" : `nethogs ${delaySec}s`} · 库:${noDb ? "关闭" : dbPath} · 规则:${engine !== null ? "开" : "关"} · Ctrl+C 退出)…`);

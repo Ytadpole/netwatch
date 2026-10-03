@@ -64,6 +64,8 @@ export class Store {
   private readonly db: DatabaseSync;
   private readonly stmtFlush: StatementSync;
   private readonly stmtDestination: StatementSync;
+  private readonly stmtDestFirstSeen: StatementSync;
+  private readonly stmtAlertInsert: StatementSync;
 
   constructor(dbPath: string) {
     if (dbPath !== ":memory:") {
@@ -83,6 +85,8 @@ export class Store {
       INSERT INTO destinations (remote_ip, first_seen) VALUES (?, ?)
       ON CONFLICT(remote_ip) DO NOTHING
     `);
+    this.stmtDestFirstSeen = this.db.prepare("SELECT first_seen FROM destinations WHERE remote_ip = ?");
+    this.stmtAlertInsert = this.db.prepare("INSERT INTO alerts (at, rule, severity, detail) VALUES (?, ?, ?, ?)");
   }
 
   /** 整分钟桶落库;同一桶重复 flush 以最新值覆盖(幂等) */
@@ -108,7 +112,40 @@ export class Store {
     }
   }
 
+  /** 目的地首见查询(规则引擎 new-destination 判定用);无记录返回 null */
+  destinationFirstSeen(remoteIp: string): number | null {
+    const row = this.stmtDestFirstSeen.get(remoteIp) as { first_seen: number } | undefined;
+    return row?.first_seen ?? null;
+  }
+
+  /** 告警入库(§6);detail 为触发快照对象,以 JSON 文本存储 */
+  insertAlert(alert: AlertInsert): number {
+    const r = this.stmtAlertInsert.run(alert.at, alert.rule, alert.severity, JSON.stringify(alert.detail));
+    return Number(r.lastInsertRowid);
+  }
+
+  /** 最近告警(查询/测试用;新在前) */
+  recentAlerts(limit = 20): Array<{ id: number; at: number; rule: string; severity: string; detail: unknown }> {
+    const rows = this.db
+      .prepare("SELECT id, at, rule, severity, detail FROM alerts ORDER BY id DESC LIMIT ?")
+      .all(limit) as Array<Record<string, unknown>>;
+    return rows.map((r) => ({
+      id: Number(r.id),
+      at: Number(r.at),
+      rule: String(r.rule),
+      severity: String(r.severity),
+      detail: r.detail === null ? undefined : (JSON.parse(String(r.detail)) as unknown),
+    }));
+  }
+
   close(): void {
     this.db.close();
   }
+}
+
+export interface AlertInsert {
+  at: number;
+  rule: "new-destination" | "volume-threshold" | "unknown-process";
+  severity: "info" | "warn" | "high";
+  detail: unknown;
 }

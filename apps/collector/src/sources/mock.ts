@@ -28,7 +28,7 @@ const FLOWS: FlowSpec[] = [
   { process: "chrome", pid: 1234, ip: "108.177.10.99", port: 443, sentMin: 5_000, sentMax: 40_000, active: 0.5 },
   { process: "nextcloud-sync", pid: 2045, ip: "192.168.1.10", port: 443, sentMin: 120_000, sentMax: 900_000, active: 0.6 },
   { process: "code", pid: 3311, ip: "140.82.121.4", port: 443, sentMin: 800, sentMax: 9_000, active: 0.3 },
-  { process: "backup-agent", pid: 5501, ip: "203.0.113.2", port: 443, sentMin: 200_000, sentMax: 3_000_000, active: 0.08, novel: true }, // 冷门进程偶发大上传
+  { process: "backup-agent", pid: 5501, ip: "203.0.113.2", port: 443, sentMin: 200_000, sentMax: 5_000_000, active: 0.08, novel: true }, // 冷门进程偶发大上传(演示中可触发 volume-threshold)
 ];
 
 const randInt = (min: number, max: number): number => min + Math.floor(Math.random() * (max - min + 1));

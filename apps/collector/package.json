@@ -8,9 +8,12 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "start": "tsx src/cli.ts"
+    "test": "tsx --test \"test/*.test.ts\"",
+    "start": "tsx src/cli.ts",
+    "query": "tsx src/query-cli.ts"
   },
   "dependencies": {
-    "@netwatch/shared": "*"
+    "@netwatch/shared": "*",
+    "zod": "^4.1.5"
   }
 }

@@ -40,12 +40,12 @@
 
 ## Phase 3 — 规则引擎 + 告警(1 天)
 
-- [ ] 三条规则:`new-destination` / `volume-threshold` / `unknown-process`(§6)
-- [ ] 白名单(进程 × 目的 IP),命中静默
-- [ ] 告警入库 + `notify-send` 桌面通知 + webhook
-- [ ] 类型化配置文件(zod 校验)
+- [x] 三条规则:`new-destination` / `volume-threshold` / `unknown-process`(§6;`rules/engine.ts`,unknown 的连续窗口为滑窗近似)
+- [x] 白名单(进程 × 目的 IP;支持 `remoteIp:"*"` 进程级静默),命中静默
+- [x] 告警入库 + `notify-send` 桌面通知 + webhook(通知失败静默,不影响采集;无图形会话自动跳过桌面通知)
+- [x] 类型化配置文件(zod 校验;`--rules=path`,缺省用 §6 内置默认阈值)
 
-**验收**:人为触发三条规则各一次(新目的地 / 大上传 / UNKNOWN)均收到通知并入库。
+**验收**:人为触发三条规则各一次(新目的地 / 大上传 / UNKNOWN)均收到通知并入库。——node:test 三规则各触发一次全过(含白名单/冷却/严重度升级断言);mock 冒烟中 new-destination 与 unknown-process 实际触发并入库;volume-threshold 与桌面通知在 root 实测场景顺带确认。
 
 ## Phase 4 — Web 仪表盘(2~3 天)
 
@@ -89,4 +89,5 @@ Phase 0 ──→ 1 ──→ 2 ──→ 3 ──→ 4 ──→ 5 ──→ 6/
 - [x] 开发计划(plan.md,本文件)
 - [ ] Phase 0 spike:契约定稿 + ss/DNS 结论已得;**剩采样一步**(终端执行 `sudo bash docs/samples/run-spike.sh`)
 - [ ] Phase 1 骨架完成(mock 端到端):剩样本校准解析器 → root 实测 30 分钟验收
-- [ ] **→ Phase 2 完成(mock 数据验证)**:SQLite 落库 + 查询 CLI + zod 校验;真实数据核对随 Phase 1 收口
+- [x] Phase 2 完成(mock 数据验证):SQLite 落库 + 查询 CLI + zod 校验;真实数据核对随 Phase 1 收口
+- [ ] **→ Phase 3 完成**:规则引擎三规则 + 白名单 + 通知 + zod 配置(node:test 4/4 过);下一步 Phase 4 Web 仪表盘
