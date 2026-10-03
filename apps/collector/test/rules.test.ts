@@ -17,28 +17,35 @@ function flow(at: number, sentBytes: number, remoteIp: string = PUBLIC_IP, proce
   return { kind: "flow", pid, process, remoteIp, remotePort: 443, sentBytes, recvBytes: 0, at };
 }
 
-test("new-destination:公网首见告警 info;重复/白名单/局域网/存量不告警;当分钟超量升级 warn", () => {
+test("new-destination:冷启动首屏批静默;之后公网首见告警 info;重复/白名单/局域网不告警;超量升 warn", () => {
   const store = new Store(":memory:");
   const cfg = loadRulesConfig();
   cfg.whitelist.push({ process: "ok-app", remoteIp: "8.8.8.8" });
   const eng = new RuleEngine(store, cfg, [], { intervalSec: 2 });
 
-  const first = eng.process(flow(T0, 1_000));
+  // 冷启动首屏批(≤3s):存量目的地静默(部署瞬间不弹一波通知)
+  assert.equal(eng.process(flow(T0, 1_000, "5.5.5.5")).length, 0);
+  assert.equal(eng.process(flow(T0 + 2_000, 1_000, "6.6.6.6", "app2", 3)).length, 0);
+
+  // 窗口之后的公网首见 → info
+  const first = eng.process(flow(T0 + 4_000, 1_000));
   assert.equal(first.length, 1);
   assert.equal(first[0]!.rule, "new-destination");
   assert.equal(first[0]!.severity, "info");
 
   // 同 IP 重复不告
-  assert.equal(eng.process(flow(T0 + 1_000, 1_000)).length, 0);
+  assert.equal(eng.process(flow(T0 + 5_000, 1_000)).length, 0);
   // 白名单进程 × IP 静默
-  assert.equal(eng.process(flow(T0 + 2_000, 1_000, "8.8.8.8", "ok-app", 2)).length, 0);
+  assert.equal(eng.process(flow(T0 + 6_000, 1_000, "8.8.8.8", "ok-app", 2)).length, 0);
   // 局域网与环回不触发(§6 只盯公网)
-  assert.equal(eng.process(flow(T0 + 3_000, 1_000, "192.168.1.10")).length, 0);
-  assert.equal(eng.process(flow(T0 + 3_100, 1_000, "127.0.0.1")).length, 0);
+  assert.equal(eng.process(flow(T0 + 7_000, 1_000, "192.168.1.10")).length, 0);
+  assert.equal(eng.process(flow(T0 + 7_100, 1_000, "127.0.0.1")).length, 0);
 
   // 当分钟上传 > 10MB → severity 升 warn
   const eng2 = new RuleEngine(new Store(":memory:"), loadRulesConfig(), [], { intervalSec: 2 });
-  const escalated = eng2.process(flow(T0, 11 * MB, "9.9.9.9"));
+  eng2.process(flow(T0, 1_000, "9.9.9.9")); // 首屏批静默
+  const escalated = eng2.process(flow(T0 + 4_000, 11 * MB, "8.8.4.4"));
+  assert.equal(escalated[0]!.rule, "new-destination");
   assert.equal(escalated[0]!.severity, "warn");
 
   // 告警已入库

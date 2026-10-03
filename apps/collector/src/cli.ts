@@ -15,6 +15,7 @@ import { existsSync } from "node:fs";
 import { createTrafficSource, NethogsSourceError } from "./sources/index.js";
 import { RollingAggregator } from "./aggregate.js";
 import { renderSnapshot, YELLOW, RESET } from "./render.js";
+import { Enricher } from "./enrich.js";
 import { Store, defaultDbPath } from "./store.js";
 import { loadRulesConfig } from "./rules/config.js";
 import { RuleEngine } from "./rules/engine.js";
@@ -83,6 +84,9 @@ try {
   fail(`✗ ${err instanceof Error ? err.message : String(err)}`);
 }
 
+// 富化器(§3.3.1):代理 transit 识别 + 两跳关联,附加推断字段不改归因事实
+const enricher = new Enricher();
+
 let stopped = false;
 const timer = setInterval(() => {
   if (stopped) return;
@@ -109,9 +113,10 @@ const timer = setInterval(() => {
 void (async () => {
   try {
     for await (const ev of source.events()) {
-      agg.push(ev);
+      const enriched = enricher.process(ev);
+      agg.push(enriched);
       if (engine !== null) {
-        for (const a of engine.process(ev)) {
+        for (const a of engine.process(enriched)) {
           console.error(`${YELLOW}🔔 [${a.severity}] ${a.rule}${RESET} ${a.detail.message}${RESET}`);
         }
       }

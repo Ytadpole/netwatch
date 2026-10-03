@@ -17,9 +17,8 @@ import {
   defaultDbPath,
   defaultRulesPath,
   LivePayloadSchema,
-  TopProcessRowSchema,
-  TopDestinationRowSchema,
 } from "@netwatch/shared";
+import { topProcesses, topDestinations } from "@netwatch/shared";
 import { historySeries } from "./history.js";
 import { LiveReader } from "./live.js";
 import { readRulesFile, updateWhitelist } from "./rules-file.js";
@@ -71,32 +70,10 @@ app.get("/api/top/processes", (c) => {
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
   }
-  const db = openReadonly();
   try {
-    const since = Math.floor((Date.now() - rangeSec * 1000) / 60_000) * 60_000;
-    const raw = db
-      .prepare(
-        `SELECT kind, pid, process,
-                SUM(min_sent) AS total_sent, SUM(min_recv) AS total_recv, MAX(min_sent) AS peak_minute_sent
-         FROM (SELECT minute, kind, pid, process, SUM(sent) AS min_sent, SUM(recv) AS min_recv
-               FROM flow_minutes WHERE minute >= ? GROUP BY minute, kind, pid, process)
-         GROUP BY kind, pid, process ORDER BY total_sent DESC LIMIT ?`,
-      )
-      .all(since, Number(c.req.query("limit") ?? 20)) as Array<Record<string, unknown>>;
-    return c.json(
-      raw.map((r) =>
-        TopProcessRowSchema.parse({
-          kind: r.kind,
-          pid: Number(r.pid),
-          process: String(r.process),
-          totalSent: Number(r.total_sent),
-          totalRecv: Number(r.total_recv),
-          peakMinuteSent: Number(r.peak_minute_sent),
-        }),
-      ),
-    );
-  } finally {
-    db.close();
+    return c.json(topProcesses({ dbPath, rangeSec, limit: Number(c.req.query("limit") ?? 20) }));
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
   }
 });
 
@@ -107,35 +84,10 @@ app.get("/api/top/destinations", (c) => {
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
   }
-  const db = openReadonly();
   try {
-    const since = Math.floor((Date.now() - rangeSec * 1000) / 60_000) * 60_000;
-    const raw = db
-      .prepare(
-        `SELECT f.remote_ip AS remote_ip, d.domain, d.country, d.asn, d.first_seen,
-                SUM(f.min_sent) AS total_sent, SUM(f.min_recv) AS total_recv, MAX(f.min_sent) AS peak_minute_sent
-         FROM (SELECT minute, remote_ip, SUM(sent) AS min_sent, SUM(recv) AS min_recv
-               FROM flow_minutes WHERE minute >= ? GROUP BY minute, remote_ip) f
-         LEFT JOIN destinations d ON d.remote_ip = f.remote_ip
-         GROUP BY f.remote_ip ORDER BY total_sent DESC LIMIT ?`,
-      )
-      .all(since, Number(c.req.query("limit") ?? 20)) as Array<Record<string, unknown>>;
-    return c.json(
-      raw.map((r) =>
-        TopDestinationRowSchema.parse({
-          remoteIp: String(r.remote_ip),
-          domain: r.domain === null || r.domain === undefined ? undefined : String(r.domain),
-          country: r.country === null || r.country === undefined ? undefined : String(r.country),
-          asn: r.asn === null || r.asn === undefined ? undefined : String(r.asn),
-          firstSeen: r.first_seen === null || r.first_seen === undefined ? undefined : Number(r.first_seen),
-          totalSent: Number(r.total_sent),
-          totalRecv: Number(r.total_recv),
-          peakMinuteSent: Number(r.peak_minute_sent),
-        }),
-      ),
-    );
-  } finally {
-    db.close();
+    return c.json(topDestinations({ dbPath, rangeSec, limit: Number(c.req.query("limit") ?? 20) }));
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
   }
 });
 

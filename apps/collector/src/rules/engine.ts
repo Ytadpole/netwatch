@@ -2,6 +2,7 @@
 
 import type { TrafficEvent } from "@netwatch/shared";
 import { isLan, isLoopback } from "../aggregate.js";
+import type { EnrichedEvent } from "../enrich.js";
 import type { Store } from "../store.js";
 import type { RulesConfig } from "./config.js";
 import type { Notifier } from "./notify.js";
@@ -34,6 +35,8 @@ export interface RuleEngineOptions {
 /** 同一规则键的告警冷却,防止刷屏 */
 const COOLDOWN_MS = 10 * 60_000;
 const HOUR_MS = 3_600_000;
+/** 冷启动首屏窗口:窗口内遇到的公网目的地视为存量流量,不触发 new-destination(与聚合器 baseline 同理) */
+const BASELINE_MS = 3_000;
 
 function fmtMB(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
@@ -46,6 +49,8 @@ interface Delta {
 
 export class RuleEngine {
   private readonly intervalSec: number;
+  /** 首个事件的时刻:冷启动 baseline 窗口的锚点 */
+  private firstEventAt: number | null = null;
   /** 本次运行内已告警过的目的 IP(new-destination 只告一次) */
   private readonly alertedDestinations = new Set<string>();
   private readonly lastAlertAt = new Map<string, number>();
@@ -69,6 +74,7 @@ export class RuleEngine {
 
   /** 处理一个事件,返回本次触发的告警(副作用:入库 + 通知) */
   process(e: TrafficEvent): Alert[] {
+    this.firstEventAt ??= e.at;
     const alerts: Alert[] = [];
     if (e.kind === "flow") {
       const ring = this.flowRing.get(e.process) ?? [];
@@ -93,6 +99,13 @@ export class RuleEngine {
     const cfg = this.config.newDestination;
     if (!cfg.enabled) return null;
     if (isLoopback(e.remoteIp) || isLan(e.remoteIp)) return null; // 只盯公网目的地
+    if ((e as EnrichedEvent).transit === true) {
+      return null; // transit 代理进程的出站:告警应归因到背后的应用,当前数据做不到(§3.3.1);volume 规则仍生效
+    }
+    if (this.firstEventAt !== null && e.at - this.firstEventAt < BASELINE_MS) {
+      this.alertedDestinations.add(e.remoteIp); // 冷启动首屏批:存量目的地静默(部署瞬间不弹一波通知)
+      return null;
+    }
     if (this.alertedDestinations.has(e.remoteIp)) return null;
     if (this.whitelisted(e.process, e.remoteIp)) return null;
     if (this.store?.destinationFirstSeen(e.remoteIp) != null) {

@@ -58,8 +58,9 @@
 
 ## Phase 5 — 常驻 + 富化(1~2 天)
 
+- [x] 环回代理两跳富化(§3.3.1,评审发现的告警污染问题先行解决):transit 识别(≥3 次字节相关命中确认)+ 两跳关联(±25% 字节/±5s 时窗)+ 规则引擎对 transit 进程豁免 new-destination;enrich.test.ts 4 项全过
 - [ ] systemd 双 unit(collector 用 root,web 用普通用户,§7)
-- [ ] GeoLite2 本地库 → 归属地/ASN;反向 DNS 兜底
+- [ ] GeoLite2 本地库 → 归属地/ASN;反向 DNS 兜底(需要 GeoLite2 库文件/DNS 观察就绪)
 - [ ] DNS 观察(本机可行路径,§3.3);目的地分类规则表(网盘/对象存储/AI 服务)
 - [ ] 日志 + 崩溃自恢复;`flow_minutes` 90 天清理任务
 - [ ] README(安装、运行、截图)
@@ -90,4 +91,4 @@ Phase 0 ──→ 1 ──→ 2 ──→ 3 ──→ 4 ──→ 5 ──→ 6/
 - [ ] Phase 0 spike:契约定稿 + ss/DNS 结论已得;**剩采样一步**(终端执行 `sudo bash docs/samples/run-spike.sh`)
 - [ ] Phase 1 骨架完成(mock 端到端):剩样本校准解析器 → root 实测 30 分钟验收
 - [x] Phase 2 完成(mock 数据验证):SQLite 落库 + 查询 CLI + zod 校验;真实数据核对随 Phase 1 收口
-- [ ] **→ Phase 4 完成**:Hono API + React 三视图 + SSE 重连(浏览器实况验证);下一步 Phase 5 常驻 + 富化
+- [ ] **→ Phase 5 进行中**:两跳富化完成;冷启动告警风暴已修(规则引擎首屏批 baseline);Web 端 Top 查询去重复;剩 systemd / GeoIP / DNS 观察 / 清理任务 / README
