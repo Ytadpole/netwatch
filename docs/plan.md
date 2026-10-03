@@ -31,12 +31,12 @@
 
 ## Phase 2 — 落库与查询(1 天)
 
-- [ ] SQLite 建表(`flow_minutes` / `destinations` / `alerts`,§4)
-- [ ] 聚合器定期落盘;首见目的地写 `destinations`
-- [ ] 查询 CLI:`top 1h|24h|7d`(按进程/按目的地)
-- [ ] 读库数据过 zod 校验(顺带复习 zod)
+- [x] SQLite 建表(`flow_minutes` / `destinations` / `alerts`,§4;node:sqlite + WAL;§4 契约已修订:补 remote_port 列、pid NOT NULL(-1 哨兵)、增 kind 列)
+- [x] 聚合器定期落盘(`drainClosedMinutes` 整桶 REPLACE 幂等);首见目的地写 `destinations`(first_seen = 事件时刻)
+- [x] 查询 CLI:`top 1h|24h|7d`(按进程/按目的地,`npm run query`)
+- [x] 读库数据过 zod 校验(schema 在 packages/shared,Phase 4 API 复用)
 
-**验收**:查询结果与 Phase 1 终端输出手工核对一致;`destinations.first_seen` 正确。
+**验收**:查询结果与 Phase 1 终端输出核对一致 ✓(mock 数据三方核对,19 项断言:总量 915000 不丢不重、峰值分钟、unknown 独立组、重复 flush 幂等);`destinations.first_seen` 正确 ✓(= 事件时刻)。真实源数据核对随 Phase 1(root)收口后补充。
 
 ## Phase 3 — 规则引擎 + 告警(1 天)
 
@@ -88,4 +88,5 @@ Phase 0 ──→ 1 ──→ 2 ──→ 3 ──→ 4 ──→ 5 ──→ 6/
 - [x] 设计文档(design.md,含 §5.1 界面线框、§11 功能池)
 - [x] 开发计划(plan.md,本文件)
 - [ ] Phase 0 spike:契约定稿 + ss/DNS 结论已得;**剩采样一步**(终端执行 `sudo bash docs/samples/run-spike.sh`)
-- [ ] **→ Phase 1 骨架完成**(`npm run collector:mock` 可端到端体验;typecheck 常绿):剩样本校准解析器 → root 实测 30 分钟验收
+- [ ] Phase 1 骨架完成(mock 端到端):剩样本校准解析器 → root 实测 30 分钟验收
+- [ ] **→ Phase 2 完成(mock 数据验证)**:SQLite 落库 + 查询 CLI + zod 校验;真实数据核对随 Phase 1 收口

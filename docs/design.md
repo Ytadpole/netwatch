@@ -123,23 +123,30 @@ export type EnrichedFlow = Extract<TrafficEvent, { kind: "flow" }> & {
 
 ```sql
 -- 每分钟每 (进程 × 远端) 一行,原始事件不落库
+-- Phase 2 修订:① 补上主键里引用但漏声明的 remote_port 列;
+--   ② pid NOT NULL,flow.pid=null(进程名已知、PID 缺失)存 -1 哨兵——SQLite 主键
+--      把 NULL 视为互异,可空 pid 会产生同键重复行;
+--   ③ 增列 kind 区分 'flow' 与 'unknown-flow'(归因失败):unknown 行 pid=-1、
+--      process='',与 pid=null 的事件是两种东西,不得混用(§6)。
 CREATE TABLE flow_minutes (
-  minute    INTEGER,          -- Unix 时间戳,整分
-  pid       INTEGER,
-  process   TEXT,
-  remote_ip TEXT,
-  domain    TEXT,             -- 富化,可空
-  country   TEXT,
-  asn       TEXT,
-  sent      INTEGER,          -- 该分钟上传字节
-  recv      INTEGER,
-  PRIMARY KEY (minute, pid, process, remote_ip, remote_port)
+  minute      INTEGER NOT NULL,  -- Unix 时间戳,整分
+  kind        TEXT NOT NULL,     -- 'flow' | 'unknown-flow'
+  pid         INTEGER NOT NULL,  -- 未知 PID 存 -1
+  process     TEXT NOT NULL,
+  remote_ip   TEXT NOT NULL,
+  remote_port INTEGER NOT NULL,
+  domain      TEXT,              -- 富化,可空(Phase 5)
+  country     TEXT,
+  asn         TEXT,
+  sent        INTEGER NOT NULL,  -- 该分钟上传字节
+  recv        INTEGER NOT NULL,
+  PRIMARY KEY (minute, kind, pid, process, remote_ip, remote_port)
 );
 
 CREATE TABLE destinations (        -- 目的地维表:首见时间用于"新目的地"告警
   remote_ip TEXT PRIMARY KEY,
   domain TEXT, country TEXT, asn TEXT,
-  first_seen INTEGER
+  first_seen INTEGER NOT NULL      -- 事件时刻(毫秒),非落盘时刻
 );
 
 CREATE TABLE alerts (
@@ -149,6 +156,8 @@ CREATE TABLE alerts (
   detail JSON           -- 触发时的快照(进程/目的地/速率/当量)
 );
 ```
+
+库文件默认 `~/.local/share/netwatch/netwatch.db`(XDG),WAL 模式——采集端(root)写、展示端(普通用户)读是两个进程的常态并发,Phase 5 部署时细化文件权限。
 
 查询模式全部围绕 `flow_minutes` 的聚合(最近 N 分钟 Top、按进程日累计、按目的地日累计),数据量:每分钟几十行,一年百万级,SQLite 无压力。
 

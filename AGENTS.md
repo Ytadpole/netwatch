@@ -8,13 +8,14 @@
   - [docs/design.md](docs/design.md) — 设计全文。重点:§3 采集层(TrafficSource 契约)、§4 数据模型、§5 Web/API(§5.1 界面线框)、§6 规则引擎、§11 功能池。
   - [docs/plan.md](docs/plan.md) — Phase 0~8 计划,每个 Phase 末尾有验收标准。
   - [docs/samples/spike-notes.md](docs/samples/spike-notes.md) — spike 结论:数据源可行性、契约定稿决策、已知坑。
-- 工作按 Phase 推进,**Phase 0 差采样一步**(sudo 脚本由用户终端执行),**Phase 1 骨架已完成**(解析器待样本校准)。开工前确认上一 Phase 验收已达成;完成事项勾掉 plan.md 复选框并更新其「当前状态」。
+- 工作按 Phase 推进,**Phase 0 差采样一步**(sudo 脚本由用户终端执行),**Phase 1 骨架与 Phase 2 落库/查询已完成**(均以 mock 数据验证,真实源待样本校准)。开工前确认上一 Phase 验收已达成;完成事项勾掉 plan.md 复选框并更新其「当前状态」。
 
 ## 命令
 
 - 根目录 npm workspaces(已初始化):
   - `npm run typecheck` — 全部包 strict TS 校验,必须常绿。
   - `npm run collector:mock` — mock 源跑采集 CLI,无需 root;`npm run collector` 为真实 nethogs 源,需要 root。
+  - `npm run query -- top 1h [--by=destination]` — 读库查询 CLI,普通用户。
   - 需要改系统状态的只有 spike 采样脚本(装 nethogs、root 抓包),由用户自己在终端跑,agent 不要尝试 sudo。
 - 无构建产物,运行经 tsx;运行期目录仅 `packages/shared` 与 `apps/collector`(web 包 Phase 4 建)。
 

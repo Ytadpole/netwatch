@@ -13,6 +13,20 @@ export function fmtRate(bytesPerSec: number): string {
   return `${(bytesPerSec / 1024 ** 3).toFixed(2)} GB/s`;
 }
 
+export function fmtBytes(bytes: number): string {
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(2)} KB`;
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(2)} MB`;
+  return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+}
+
+/** MM-DD HH:mm(本地时区),Top 表的首见/时间列用 */
+export function fmtClock(ms: number): string {
+  const d = new Date(ms);
+  const p = (n: number): string => String(n).padStart(2, "0");
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 function bar(share: number, width = 10): string {
   const filled = Math.round(Math.min(1, Math.max(0, share)) * width);
   return "█".repeat(filled).padEnd(width, "░");

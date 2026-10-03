@@ -1,6 +1,7 @@
 import type { TrafficEvent } from "@netwatch/shared";
+import type { MinuteRow, DestinationSighting } from "./store.js";
 
-/** 内存滚动窗口聚合(分钟桶 × 进程 × 目的地),Phase 1 形态;Phase 2 落 SQLite */
+/** 内存滚动窗口聚合(分钟桶 × 进程 × 目的地),Phase 1 形态;Phase 2 接 Store 落库 */
 
 export interface DestLive {
   remoteIp: string;
@@ -34,6 +35,11 @@ export interface LiveSnapshot {
   processes: ProcessLive[];
 }
 
+export interface ClosedMinute {
+  minute: number;
+  rows: MinuteRow[];
+}
+
 interface BucketEntry {
   sent: number;
   recv: number;
@@ -59,10 +65,34 @@ export function isLan(ip: string): boolean {
 }
 
 const UNKNOWN_PROCESS = "(归因失败)";
+/** 键分隔符用单元分隔符:进程名可能含 "|" 等常规字符 */
+const SEP = "\u001F";
 
 function bucketKey(e: TrafficEvent): string {
-  if (e.kind === "unknown-flow") return `unknown|${e.remoteIp}|${e.remotePort}`;
-  return `flow|${e.pid ?? "-"}|${e.process}|${e.remoteIp}|${e.remotePort}`;
+  if (e.kind === "unknown-flow") return ["unknown", e.remoteIp, String(e.remotePort)].join(SEP);
+  return ["flow", e.pid ?? "-", e.process, e.remoteIp, String(e.remotePort)].join(SEP);
+}
+
+interface KeyParts {
+  kind: "flow" | "unknown-flow";
+  pid: number | null;
+  process: string;
+  remoteIp: string;
+  remotePort: number;
+}
+
+function parseKey(key: string): KeyParts {
+  const p = key.split(SEP);
+  if (p[0] === "unknown") {
+    return { kind: "unknown-flow", pid: null, process: UNKNOWN_PROCESS, remoteIp: p[1] ?? "", remotePort: Number(p[2] ?? 0) };
+  }
+  return {
+    kind: "flow",
+    pid: p[1] === "-" ? null : Number(p[1]),
+    process: p[2] ?? "",
+    remoteIp: p[3] ?? "",
+    remotePort: Number(p[4] ?? 0),
+  };
 }
 
 export interface AggregatorOptions {
@@ -81,9 +111,12 @@ export class RollingAggregator {
 
   private readonly minuteBuckets = new Map<number, Map<string, BucketEntry>>();
   private readonly recent: RecentDelta[] = [];
-  /** remoteIp → 首见时刻;Phase 2 换 destinations 表 */
+  /** remoteIp → 事件时刻的首见;Phase 2 起 drainClosedMinutes 上报给 Store(存真实时刻) */
   private readonly destFirstSeen = new Map<string, number>();
-  /** 首个采样批的时间;批内出现的目的地视为"既有",避免启动时满屏 NEW */
+  /** 启动首屏批里出现的目的地:存量流量,永远不标 NEW(与存储的首见时间无关) */
+  private readonly baselineDests = new Set<string>();
+  private readonly reportedDests = new Set<string>();
+  /** 首个采样批的时间 */
   private firstPushAt: number | null = null;
 
   constructor(opts: AggregatorOptions = {}) {
@@ -108,66 +141,82 @@ export class RollingAggregator {
 
     if (e.kind === "flow" && !this.destFirstSeen.has(e.remoteIp)) {
       this.firstPushAt ??= e.at;
-      const baseline = e.at - this.firstPushAt < 3_000;
-      this.destFirstSeen.set(e.remoteIp, baseline ? e.at - this.newDestWindowMs : e.at);
+      this.destFirstSeen.set(e.remoteIp, e.at);
+      if (e.at - this.firstPushAt < 3_000) this.baselineDests.add(e.remoteIp);
     }
     this.recent.push({ key, at: e.at, sent: e.sentBytes, recv: e.recvBytes });
+  }
+
+  /**
+   * 排空已关闭的分钟桶(分钟 < 当前分钟):交给 Store 落库,桶从内存移除。
+   * newDestinations 里是尚未上报过的首见目的地,first_seen 为事件时刻而非落盘时刻。
+   */
+  drainClosedMinutes(now: number): { minutes: ClosedMinute[]; newDestinations: DestinationSighting[] } {
+    const currentMinute = Math.floor(now / 60_000) * 60_000;
+    const minutes: ClosedMinute[] = [];
+    for (const [minute, bucket] of this.minuteBuckets) {
+      if (minute >= currentMinute) continue;
+      const rows: MinuteRow[] = [];
+      for (const [key, entry] of bucket) {
+        const k = parseKey(key);
+        rows.push({
+          kind: k.kind,
+          pid: k.pid,
+          process: k.process,
+          remoteIp: k.remoteIp,
+          remotePort: k.remotePort,
+          sent: entry.sent,
+          recv: entry.recv,
+        });
+      }
+      minutes.push({ minute, rows });
+      this.minuteBuckets.delete(minute);
+    }
+    minutes.sort((a, b) => a.minute - b.minute);
+
+    const newDestinations: DestinationSighting[] = [];
+    for (const [ip, firstSeen] of this.destFirstSeen) {
+      if (!this.reportedDests.has(ip)) {
+        this.reportedDests.add(ip);
+        newDestinations.push({ remoteIp: ip, firstSeen });
+      }
+    }
+    return { minutes, newDestinations };
   }
 
   snapshot(now: number = Date.now()): LiveSnapshot {
     this.pruneRecent(now);
     const windowSec = this.rateWindowMs / 1000;
 
-    interface KeyRate {
+    interface KeyRate extends KeyParts {
       sent: number;
       recv: number;
-      sample: { kind: string; pid: number | null; process: string; remoteIp: string; remotePort: number };
     }
     const byKey = new Map<string, KeyRate>();
     for (const d of this.recent) {
       let acc = byKey.get(d.key);
       if (!acc) {
-        acc = {
-          sent: 0,
-          recv: 0,
-          sample: { kind: "", pid: null, process: "", remoteIp: "", remotePort: 0 },
-        };
+        acc = { ...parseKey(d.key), sent: 0, recv: 0 };
         byKey.set(d.key, acc);
       }
       acc.sent += d.sent;
       acc.recv += d.recv;
     }
-    // recent 里只存了 key,进程/目的地信息从 key 反解(见 bucketKey 的分隔符约定)
-    for (const [key, acc] of byKey) {
-      const parts = key.split("|");
-      if (parts[0] === "unknown") {
-        acc.sample = { kind: "unknown-flow", pid: null, process: UNKNOWN_PROCESS, remoteIp: parts[1] ?? "", remotePort: Number(parts[2] ?? 0) };
-      } else {
-        acc.sample = {
-          kind: "flow",
-          pid: parts[1] === "-" ? null : Number(parts[1]),
-          process: parts[2] ?? "",
-          remoteIp: parts[3] ?? "",
-          remotePort: Number(parts[4] ?? 0),
-        };
-      }
-    }
 
     const procMap = new Map<string, { info: { pid: number | null; process: string; unattributed: boolean }; sentRate: number; recvRate: number; dests: DestLive[] }>();
     let totalSent = 0;
     let totalRecv = 0;
-    for (const [key, acc] of byKey) {
-      const s = acc.sample;
+    for (const acc of byKey.values()) {
       const sentRate = acc.sent / windowSec;
       const recvRate = acc.recv / windowSec;
       totalSent += acc.sent;
       totalRecv += acc.recv;
-      const unattributed = s.kind === "unknown-flow";
-      const groupKey = unattributed ? UNKNOWN_PROCESS : `${s.pid ?? "-"}|${s.process}`;
+      const unattributed = acc.kind === "unknown-flow";
+      const groupKey = unattributed ? UNKNOWN_PROCESS : `${acc.pid ?? "-"}|${acc.process}`;
       let proc = procMap.get(groupKey);
       if (!proc) {
         proc = {
-          info: { pid: s.pid, process: unattributed ? UNKNOWN_PROCESS : s.process, unattributed },
+          info: { pid: acc.pid, process: unattributed ? UNKNOWN_PROCESS : acc.process, unattributed },
           sentRate: 0,
           recvRate: 0,
           dests: [],
@@ -177,16 +226,17 @@ export class RollingAggregator {
       proc.sentRate += sentRate;
       proc.recvRate += recvRate;
       proc.dests.push({
-        remoteIp: s.remoteIp,
-        remotePort: s.remotePort,
+        remoteIp: acc.remoteIp,
+        remotePort: acc.remotePort,
         sentRate,
         recvRate,
         share: 0,
-        lan: isLan(s.remoteIp),
-        loopback: isLoopback(s.remoteIp),
-        isNew: this.isNewDestination(unattributed ? null : s.remoteIp, now),
+        lan: isLan(acc.remoteIp),
+        loopback: isLoopback(acc.remoteIp),
+        isNew: this.isNewDestination(unattributed ? null : acc.remoteIp, now),
       });
     }
+
     const processes = [...procMap.values()].map((p) => {
       p.dests.sort((a, b) => b.sentRate - a.sentRate);
       for (const d of p.dests) d.share = p.sentRate > 0 ? d.sentRate / p.sentRate : 0;
@@ -210,7 +260,7 @@ export class RollingAggregator {
     };
   }
 
-  /** 某分钟桶的上传/下载总量(Phase 2 落库前的核对入口) */
+  /** 某分钟桶的上传/下载总量(核对用) */
   minuteTotals(minute: number): { sent: number; recv: number } {
     const bucket = this.minuteBuckets.get(Math.floor(minute / 60_000) * 60_000);
     if (!bucket) return { sent: 0, recv: 0 };
@@ -225,6 +275,7 @@ export class RollingAggregator {
 
   private isNewDestination(ip: string | null, now: number): boolean {
     if (ip === null) return false;
+    if (this.baselineDests.has(ip)) return false;
     const firstSeen = this.destFirstSeen.get(ip);
     return firstSeen !== undefined && now - firstSeen < this.newDestWindowMs;
   }
