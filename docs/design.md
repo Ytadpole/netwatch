@@ -51,13 +51,20 @@
 
 ## 3. 采集层设计(核心难点)
 
-### 3.1 为什么是 nethogs 起步(Linux 主路径)
+### 3.1 Linux 主路径:ss 轮询(Phase 0 采样后定稿;原 nethogs 方案降级为交叉验证)
 
-Linux 内核不提供「进程 → 上传字节数」的现成账本。nethogs 用 libpcap 抓包 + 匹配 `/proc/*/fd` 的 socket inode 归因到进程,是最成熟的现成方案:
+Phase 0 真实采样(docs/samples/)推翻了原假设:**nethogs 0.8.7 `-t` trace 模式输出的是每进程聚合** `program/pid/uid\tsent\trecv`(KB/s 速率),**没有远端地址列**——撑不起 `TrafficEvent` 的 `remoteIp` 与"传给谁"。同时 ss 旁路采样证实 `ss -tinp state established` 每条连接都带:远端 `Peer Address:Port`、进程归属 `users:(("name",pid=N,fd=N))`(root 下全量可见)、`bytes_sent`/`bytes_received` **每连接累计字节**(相邻两拍做差即增量)。
 
-- `nethogs -t -d 2` 以 trace 模式每 2 秒输出:`进程名\tPID\t发送\t接收\t...`(spike 阶段确认精确格式)。
-- 我们作为**父进程**启动它(sudo 运行 netwatch 采集端),逐行解析,零额外依赖。
-- 已知局限:nethogs 的进程归因在连接关闭后有短暂滞留;短连接可能归因到 UNKNOWN。规则引擎对 UNKNOWN 单独处理(见 §6)。
+定稿:**Linux 采集源 = ss 轮询**(`SsSource`),每 `delaySec` 起一次 `ss -tinp state established`:
+
+- 五元组(本地 addr:port,对端 addr:port)+ pid 进程 → `FlowEvent`;远端字节差 → sentBytes/recvBytes。
+- 连接首次出现只建立基线不发事件;连接消失即停(两次轮询间建立又关闭的短连接会漏——已知局限,与 §9 一致)。
+- 无 `users:` 归属的套接字 → `unknown-flow`(保留远端地址)。
+- root 不是额外负担:采集端本就以 root 运行;非 root 下只能归属自己用户的进程(其余全成 unknown-flow)。
+
+nethogs(`NethogsSource`)保留:① 进程总量的交叉验证源(Phase 6 eBPF 也要用到);② ss 异常时的降级采集器(仅"谁在传",无目的地,目的地列显示为空)。其真实格式与解析见 `parse.ts`(已按 0.8.7 校准)与 spike-notes。
+
+原 eBPF 进阶路线(§3.2)不变。
 
 ### 3.2 eBPF 进阶路线(stretch,仅 Linux)
 
@@ -255,7 +262,7 @@ GET  /api/alerts          POST /api/alerts/rules   (规则 CRUD)
 | 层 | 选型 | 说明 |
 | --- | --- | --- |
 | 运行时 | Node 22 + TypeScript(strict) | tsconfig 沿用 flashcards 的严格配置 |
-| 采集 | nethogs 子进程 + 自研行解析 | eBPF 为 stretch(§3.2) |
+| 采集 | ss 轮询(Linux 主路径,§3.1)+ nethogs 交叉验证 | eBPF 为 stretch(§3.2) |
 | 存储 | SQLite(node:sqlite 起步 → 需要时换 Drizzle) | 单文件、零运维 |
 | API | Hono + zValidator + SSE | `@hono/node-server` |
 | 前端 | React 19 + Vite + Recharts | 与 API 共享类型(hc<RpcApp>) |
@@ -279,7 +286,7 @@ GET  /api/alerts          POST /api/alerts/rules   (规则 CRUD)
 
 ## 9. 风险与对策
 
-- **nethogs 输出格式不稳定**(版本差异)→ 解析器按列名容错,spike 阶段锁定本机版本格式;预留 ss/proc 兜底采集器(同一 `Store` 接口)。
+- **数据源可行性**(Phase 0 实证):nethogs trace 无远端地址列,故 Linux 主路径为 ss 轮询;nethogs 降级为交叉验证/无目的地降级源,同一 `TrafficSource` 契约。ss 局限:两次轮询间的短连接会漏、UDP 无字节计数。
 - **权限**:sudo 采集端要最小化——采集端只写库,不开网络端口,Web 端普通用户身份。
 - **磁盘增长**:flow_minutes 按天汇总后清理 90 天前明细(定时任务,Phase 5)。
 - **隐私自悖论**:本工具自己也联网(GeoIP 查询)→ GeoIP 用本地库文件,不做在线查询。

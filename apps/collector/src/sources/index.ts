@@ -1,8 +1,9 @@
 import type { TrafficSource } from "@netwatch/shared";
 import { MockSource } from "./mock.js";
-import { NethogsSource, NethogsSourceError } from "./linux/nethogs.js";
+import { SsSource, SsSourceError } from "./linux/ss.js";
 
-export { NethogsSourceError } from "./linux/nethogs.js";
+export { SsSourceError } from "./linux/ss.js";
+export { NethogsSource, NethogsSourceError } from "./linux/nethogs.js"; // 交叉验证/降级源(§3.1),不再作 Linux 默认
 
 export interface CreateSourceOptions {
   /** 开发/演示用 mock 源(无需 root) */
@@ -14,7 +15,7 @@ export function createTrafficSource(opts: CreateSourceOptions = {}): TrafficSour
   if (opts.mock) return new MockSource();
   switch (process.platform) {
     case "linux":
-      return new NethogsSource();
+      return new SsSource(); // §3.1:Phase 0 采样定稿,ss 轮询为主路径
     case "darwin":
     case "win32":
       throw new Error(`平台适配尚未实现:${process.platform}(plan.md Phase 7/8)`);

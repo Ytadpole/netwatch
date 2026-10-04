@@ -48,7 +48,7 @@ export function renderSnapshot(snap: LiveSnapshot, opts: RenderOptions = {}): st
     const rate = `↑ ${fmtRate(p.sentRate)}`;
     lines.push(p.unattributed ? `${DIM}${head}${rate}  ← 规则引擎盯它${RESET}` : `${head}${rate}`);
     for (const d of p.destinations) {
-      const badgePlain = d.loopback ? "[代理]" : d.lan ? "[局域网]" : d.isNew ? "NEW" : "";
+      const badgePlain = d.loopback ? "[本地]" : d.lan ? "[局域网]" : d.isNew ? "NEW" : "";
       const badgeColored = badgePlain === "NEW" ? `${YELLOW}NEW${RESET}` : badgePlain;
       const destPlain = `  ${d.remoteIp}:${d.remotePort}${badgePlain ? " " + badgePlain : ""}`;
       // 先按纯文本对齐,再注入颜色(色码计入 padEnd 长度,不能直接 pad 彩色串)

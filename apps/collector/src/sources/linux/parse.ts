@@ -1,99 +1,79 @@
 import type { TrafficEvent } from "@netwatch/shared";
 
 /**
- * nethogs -t 行解析。
+ * nethogs -t 行解析(0.8.7 真实格式,Phase 0 样本校准,样本 docs/samples/nethogs.txt)。
  *
- * ⚠️ 校准点:Phase 0 采样尚未执行(等 `sudo bash docs/samples/run-spike.sh` 落地
- * docs/samples/nethogs.txt 后,以真实输出修订本文件,plan.md §Phase 0)。
- *
- * 目前的容错策略(基于 nethogs 0.8.x trace 模式的公开资料):
- * - "Refreshing:"/"Waiting..." 等头行跳过;
- * - 数据行前两列为 sent/received 速率(KB/s),按采样间隔换算为窗口内增量字节;
- * - 行内其余列尝试识别:PID(整数或 "?")、远端(ip:port / [v6]:port)、进程名;
- * - PID 缺失或程序名为 unknown-* 且行内有远端 → `unknown-flow`;
- * - 识别不出远端地址列的行 → 跳过并计数(计数通过 stats 返回,便于校准时发现)。
+ * 数据行(tab 分隔):`program/pid/uid\tsent\trecv`
+ *  - sent/recv 为 KB/s 速率,按采样间隔换算成窗口内增量字节;
+ *  - 进程名可含 `/`(全路径),解析从行首匹配到最后的 `/pid/uid` 组;
+ *  - `unknown TCP/0/0`、`unknown UDP/0/0` 等为归因失败行 → unknown-flow(无远端,
+ *    remoteIp 置空串,聚合器按 unknown 维度归卡展示;真实远端只能靠 ss 主路径);
+ *  - `Unknown connection: a-b`(连接关闭瞬间)与 `Refreshing:`/`Adding local address:`
+ *    等头部噪音跳过并计数。
+ * 注意:trace 模式无远端地址列,本源只能给"谁在传"(§3.1 降级/交叉验证源)。
  */
 
 export interface ParseResult {
   events: TrafficEvent[];
-  /** 非数据行(头行等) */
   skippedHeaders: number;
-  /** 数据行但缺远端地址列——校准信号:trace 行结构与本实现假设不符 */
-  missingRemote: number;
-  /** 归因失败行(unknown) */
+  /** 归因失败行(unknown TCP/UDP) */
   unknown: number;
 }
 
 const RATE_RE = /^\d+(\.\d+)?$/;
-const IPV4_PORT = /^(\d{1,3}(?:\.\d{1,3}){3}):(\d{1,5})$/;
-const IPV6_PORT = /^\[[0-9a-fA-F:.]+]:(\d{1,5})$/;
-const UNKNOWN_NAME_RE = /^(unknown|\?\?|\?\?\?)/i;
-
-interface Remote {
-  ip: string;
-  port: number;
-}
-
-function matchRemote(token: string): Remote | null {
-  const v4 = IPV4_PORT.exec(token);
-  if (v4) return { ip: v4[1]!, port: Number(v4[2]) };
-  const v6 = IPV6_PORT.exec(token);
-  if (v6) return { ip: token.slice(1, token.indexOf("]")), port: Number(v6[1]) };
-  return null;
-}
+// 行尾的 /pid/uid:pid 与 uid 均为纯数字,program 可含任意字符(含 /)
+const TAIL_RE = /^(.*)\/(\d+)\/(\d+)$/;
+const UNKNOWN_RE = /^unknown (TCP|UDP)(\/\d+\/\d+)?$/;
 
 export function parseNethogsLine(line: string, delaySec: number, at: number): ParseResult {
   const trimmed = line.trim();
-  if (!trimmed) return { events: [], skippedHeaders: 0, missingRemote: 0, unknown: 0 };
-  if (/^(refreshing|waiting|time|tensor|eth|lo\b)/i.test(trimmed)) {
-    return { events: [], skippedHeaders: 1, missingRemote: 0, unknown: 0 };
+  if (trimmed === "") return { events: [], skippedHeaders: 1, unknown: 0 }; // 空行也是噪音
+
+  const cols = trimmed.split("\t");
+  if (cols.length !== 3 || !RATE_RE.test(cols[1] ?? "") || !RATE_RE.test(cols[2] ?? "")) {
+    return { events: [], skippedHeaders: 1, unknown: 0 }; // Refreshing:/头部噪音/Unknown connection: 等
   }
 
-  const tokens = trimmed.split(/\s+/);
-  const sentRate = Number(tokens[0]);
-  const recvRate = Number(tokens[1]);
-  if (tokens[0] === undefined || tokens[1] === undefined || !RATE_RE.test(tokens[0]) || !RATE_RE.test(tokens[1])) {
-    return { events: [], skippedHeaders: 1, missingRemote: 0, unknown: 0 };
-  }
+  const tail = TAIL_RE.exec(cols[0] ?? "");
+  if (tail === null) return { events: [], skippedHeaders: 1, unknown: 0 };
+  const [, programRaw, pidRaw] = tail;
+  const sentBytes = Math.round(Number(cols[1]) * 1024 * delaySec);
+  const recvBytes = Math.round(Number(cols[2]) * 1024 * delaySec);
 
-  const sentBytes = Math.round(sentRate * 1024 * delaySec);
-  const recvBytes = Math.round(recvRate * 1024 * delaySec);
-  const rest = tokens.slice(2);
-
-  let remote: Remote | null = null;
-  let pid: number | null = null;
-  const nameParts: string[] = [];
-  for (const tok of rest) {
-    const r = matchRemote(tok);
-    if (r) {
-      remote = r;
-      continue;
-    }
-    if (pid === null && /^\d+$/.test(tok)) {
-      pid = Number(tok);
-      continue;
-    }
-    nameParts.push(tok);
-  }
-
-  if (!remote) {
-    return { events: [], skippedHeaders: 0, missingRemote: 1, unknown: 0 };
-  }
-
-  const name = nameParts.join(" ");
-  const unattributed = pid === null || name === "" || UNKNOWN_NAME_RE.test(name);
-  if (unattributed) {
+  if (programRaw !== undefined && UNKNOWN_RE.test(programRaw)) {
     return {
-      events: [{ kind: "unknown-flow", remoteIp: remote.ip, remotePort: remote.port, sentBytes, recvBytes, at }],
+      events: [{ kind: "unknown-flow", remoteIp: "", remotePort: 0, sentBytes, recvBytes, at }],
       skippedHeaders: 0,
-      missingRemote: 0,
       unknown: 1,
     };
   }
+
+  const pid = Number(pidRaw);
   return {
-    events: [{ kind: "flow", pid, process: name, remoteIp: remote.ip, remotePort: remote.port, sentBytes, recvBytes, at }],
+    events: [{
+      kind: "flow",
+      pid: pid > 0 ? pid : null,
+      process: programRaw ?? "",
+      remoteIp: "",
+      remotePort: 0,
+      sentBytes,
+      recvBytes,
+      at,
+    }],
     skippedHeaders: 0,
-    missingRemote: 0,
     unknown: 0,
   };
+}
+
+/** 整段 nethogs 输出 → 事件(测试/回放用) */
+export function parseNethogsText(text: string, delaySec: number, at: number): ParseResult {
+  const acc: ParseResult = { events: [], skippedHeaders: 0, unknown: 0 };
+  const body = text.replace(/\n$/, ""); // 去掉尾部换行的空行伪影
+  for (const line of body.split("\n")) {
+    const r = parseNethogsLine(line, delaySec, at);
+    acc.events.push(...r.events);
+    acc.skippedHeaders += r.skippedHeaders;
+    acc.unknown += r.unknown;
+  }
+  return acc;
 }

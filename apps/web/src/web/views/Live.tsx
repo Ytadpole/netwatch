@@ -29,7 +29,7 @@ export function LiveView({ live, caps }: Props) {
               <span className="ip">
                 {d.remoteIp}:{d.remotePort}
               </span>
-              {d.loopback ? <em className="badge">代理</em> : null}
+              {d.loopback ? <em className="badge">本地</em> : null}
               {d.lan ? <em className="badge">局域网</em> : null}
               {d.isNew ? <em className="badge new">NEW</em> : null}
               {caps.perProcessBytes ? (

@@ -54,5 +54,5 @@ apps/web/          # Hono API + React 仪表盘,普通用户
 ## 已知坑
 
 - **本机流量走环回代理 127.0.0.1:7897**:应用事件的 remoteIp 是代理而非真实远端(真实远端在代理进程的事件里)。富化层已实现 transit 识别 + 两跳关联(`apps/collector/src/enrich.ts`,§3.3.1),规则引擎对 transit 进程豁免 new-destination;上层新增消费方不得绕过富化器直接消费原始事件(详见 spike-notes)。
-- nethogs 输出格式随版本变化(本机锁定 0.8.7):解析器按列名容错,以 `docs/samples/nethogs.txt` 真实样本为准。
+- **Linux 主路径是 ss 轮询**(`sources/linux/ss.ts`,§3.1):Phase 0 采样证实 nethogs trace 模式无远端地址列,nethogs 仅作交叉验证/降级源(解析器已按 0.8.7 真实样本校准)。ss 局限:两次轮询间的短连接会漏、UDP 无字节计数。
 - `unknown-flow`(归因不到进程)是正常事件而非错误,规则引擎对它单独处理(§6),不要静默丢弃;`flow.pid=null`(进程名已知、PID 缺失)与它是两种事件,不得混用。

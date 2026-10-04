@@ -12,7 +12,7 @@
 import type { TrafficSource } from "@netwatch/shared";
 import { defaultRulesPath } from "@netwatch/shared";
 import { existsSync } from "node:fs";
-import { createTrafficSource, NethogsSourceError } from "./sources/index.js";
+import { createTrafficSource, NethogsSourceError, SsSourceError } from "./sources/index.js";
 import { RollingAggregator, isLoopback } from "./aggregate.js";
 import { renderSnapshot, YELLOW, RESET } from "./render.js";
 import { Enricher } from "./enrich.js";
@@ -144,9 +144,9 @@ void (async () => {
   } catch (err) {
     stopped = true;
     clearInterval(timer);
-    if (err instanceof NethogsSourceError) {
+    if (err instanceof NethogsSourceError || err instanceof SsSourceError) {
       console.error(`\n✗ ${err instanceof Error ? err.message : String(err)}`);
-      console.error("  提示:采集端需要 root(sudo npm run collector);无 root 环境可用 --mock 体验。");
+      console.error("  提示:ss 源非 root 也可运行(他人进程归为 unknown-flow);sudo 运行可见全量。");
     } else {
       console.error(`\n✗ 事件流异常终止:${err instanceof Error ? err.message : String(err)}`);
     }

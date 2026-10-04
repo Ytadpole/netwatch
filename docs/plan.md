@@ -12,8 +12,8 @@
 
 ## Phase 0 — Spike:验证数据源(0.5 天)
 
-- [ ] `sudo nethogs -t -d 2` 本机采样 ≥ 5 分钟,原始输出存 `docs/samples/nethogs.txt`(脚本已备:`sudo bash docs/samples/run-spike.sh`,含受控流量 + ss 旁路采样;等终端执行)
-- [ ] 确认列含义与格式(版本锁定 0.8.7-2build2,见 spike-notes),记录边界情况(UNKNOWN、连接关闭瞬间)——等样本落地
+- [x] `sudo nethogs -t -d 2` 本机采样 ≥ 5 分钟 ✓(2026-10-04,样本 2348 行 + ss 旁路 6650 行,含受控流量)
+- [x] 确认列含义与格式(0.8.7-2build2):数据行 `program/pid/uid\tsent\trecv`,**无远端地址列**;边界情况(unknown TCP/UDP 行、`Unknown connection:` 关闭瞬间、头部噪音)已记录于 spike-notes
 - [x] 定稿 `TrafficSource` 接口与 `TrafficEvent` 判别联合(§3.4/3.5),写入 `packages/shared`(细化点见 `docs/samples/spike-notes.md`)
 - [x] 顺带确认:ss 轮询兜底、DNS 观察在本机的可行路径(`spike-notes.md`;⚠️ 发现本机走环回代理 127.0.0.1:7897,"传给谁"富化需特殊处理)
 
@@ -25,7 +25,8 @@
 - [x] `sources/linux/`:nethogs 子进程管理(启动 / 崩溃退避重启 / SIGTERM 优雅退出)完成;行解析器骨架完成,**待 Phase 0 样本校准**(parse.ts 标注校准点)
 - [x] 内存滚动窗口聚合(分钟桶 × 进程 × 目的地)+ 10s 速率窗 + NEW 首见(启动首屏批视为既有,避免满屏 NEW)
 - [x] CLI:`netwatch-collector` 实时打印"谁在传"(对齐 §5.1:进程卡 / 目的地行 / 占比条 / 代理·局域网·NEW 徽标 / 归因失败卡置底);`--mock` 无 root 端到端跑通,确定性断言全过
-- [ ] 真实源(nethogs)端到端 + 30 分钟稳定性验收(依赖 Phase 0 样本与 root 实测)
+- [x] 真实源端到端 ✓:采样证实 nethogs trace 无远端列,**主路径改为 ss 轮询**(design.md §3.1);`SsSource` 已实现,非 root 真实数据(本用户进程+环回跳)端到端验证通过;nethogs 解析器已按真实格式校准(全样本回放 2062 事件)
+- [ ] 30 分钟稳定性验收(root 下长跑,SS/解析器内存与崩溃恢复)
 
 **验收**:终端实时刷新 30 分钟无内存泄漏、无崩溃;重启后自动恢复。(待 root 实测)
 
@@ -89,7 +90,7 @@ Phase 0 ──→ 1 ──→ 2 ──→ 3 ──→ 4 ──→ 5 ──→ 6/
 
 - [x] 设计文档(design.md,含 §5.1 界面线框、§11 功能池)
 - [x] 开发计划(plan.md,本文件)
-- [ ] Phase 0 spike:契约定稿 + ss/DNS 结论已得;**剩采样一步**(终端执行 `sudo bash docs/samples/run-spike.sh`)
-- [ ] Phase 1 骨架完成(mock 端到端):剩样本校准解析器 → root 实测 30 分钟验收
+- [x] **Phase 0 完成**:采样 + 格式确认 + 主路径定稿(ss 轮询);
+- [ ] **→ Phase 1 收尾**:真实源(SsSource)端到端已验证;剩 root 下 30 分钟稳定性验收
 - [x] Phase 2 完成(mock 数据验证):SQLite 落库 + 查询 CLI + zod 校验;真实数据核对随 Phase 1 收口
 - [ ] **→ Phase 5 进行中**:两跳富化 ✓、反向 DNS 兜底 ✓、90 天清理 ✓、systemd unit 文件 ✓、README ✓;剩 GeoLite2(需库文件)/ DNS 观察(需 root)/ 实机部署验收

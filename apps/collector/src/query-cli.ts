@@ -53,7 +53,7 @@ if (by === "process") {
   }
   console.log(`${"#".padEnd(4)}${"目的地".padEnd(24)}${"归属".padEnd(20)}${"上传".padStart(12)}${"下载".padStart(12)}${"首见".padStart(12)}`);
   for (const [i, r] of rows.entries()) {
-    const badge = isLoopback(r.remoteIp) ? " [代理]" : isLan(r.remoteIp) ? " [局域网]" : "";
+    const badge = isLoopback(r.remoteIp) ? " [本地]" : isLan(r.remoteIp) ? " [局域网]" : "";
     const dest = `${r.remoteIp}${badge}`;
     const cat = r.category !== undefined ? CATEGORY_LABELS[r.category] : undefined;
     const belong = [cat, r.domain, r.country].filter((v): v is string => v != null && v !== "").join(" · ") || "—";

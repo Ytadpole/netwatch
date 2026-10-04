@@ -23,8 +23,8 @@ export class NethogsSource implements TrafficSource {
   private readonly delaySec: number;
   private stopping = false;
   private child: ChildProcess | null = null;
-  /** 最近一次解析统计(观测用,校准信号见 parse.ts) */
-  lastStats = { skippedHeaders: 0, missingRemote: 0, unknown: 0 };
+  /** 最近一次解析统计(观测用,真实格式见 parse.ts) */
+  lastStats = { skippedHeaders: 0, unknown: 0 };
 
   constructor(opts: NethogsSourceOptions = {}) {
     this.delaySec = opts.delaySec ?? 2;
@@ -85,7 +85,6 @@ export class NethogsSource implements TrafficSource {
       for await (const line of rl) {
         const r = parseNethogsLine(line, this.delaySec, Date.now());
         this.lastStats.skippedHeaders += r.skippedHeaders;
-        this.lastStats.missingRemote += r.missingRemote;
         this.lastStats.unknown += r.unknown;
         for (const ev of r.events) yield ev;
         if (this.stopping) break;
