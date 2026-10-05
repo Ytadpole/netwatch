@@ -4,7 +4,7 @@
 
 进程级上传监控仪表盘:本机常驻采集 + Web 实时查看 + 异常上传告警。检测靠**行为元数据**(谁、何时、何地、多少)——不做内容审计,不做 MITM,不做拦截,只观测和告警。
 
-**状态:主线 Phase 0~4 代码完成(mock 全链路验证),Phase 5 进行中**;真实数据验收待 spike 采样。当前可跑的内容见[快速开始](#快速开始)。
+**状态:主线 Phase 0~4 代码完成(mock 全链路验证),Phase 5 进行中**;真实采集源(ss 轮询)已端到端验证,剩 root 实机验收。当前可跑的内容见[快速开始](#快速开始)。
 
 ## 它回答四个问题
 
@@ -16,7 +16,7 @@
 ## 特性
 
 - **进程级归因**:流量归到具体进程,按"进程 → 目的地"两级展示
-- **目的地富化**:DNS 观察 + 反向 DNS + GeoLite2 本地库(离线查询,本工具自己不外联)
+- **目的地富化**:反向 DNS + GeoLite2 本地库(离线查询,本工具自己不外联;DNS 观察规划中)
 - **持久化与查询**:分钟粒度聚合落 SQLite(WAL),`netwatch-query top 1h|24h|7d` 按进程/目的地回看
 - **三条告警规则**:`new-destination`(新目的地)、`volume-threshold`(上传量异常)、`unknown-process`(归因失败外传),白名单静默,桌面通知 + webhook
 - **Web 仪表盘**:深色主题,实时/历史/告警三视图,URL 即状态,可直接刷新直达
@@ -42,7 +42,7 @@
 
 | 平台 | 采集方式 | 每进程字节数 | 状态 |
 | --- | --- | --- | --- |
-| **Linux** | `nethogs -t`(libpcap) | ✅ 准确 | 首发目标 |
+| **Linux** | `ss` 轮询(主路径,Phase 0 采样定稿)+ nethogs 交叉验证 | ✅ 准确 | 首发 |
 | macOS | `nettop -P -L`(系统自带) | ✅ 系统计费 | 计划(Phase 7) |
 | Windows | ETW / 降级:轮询连接 | 降级路径无字节数 | 计划(Phase 8) |
 
@@ -50,7 +50,7 @@
 
 ## 快速开始
 
-开发初期(Phase 1 进行中):采集端 CLI 可用 mock 数据源体验;真实采集待 Phase 0 样本校准后开放。
+采集端 CLI 两种模式:mock 数据源(无需 root)体验全链路;真实源为 ss 轮询(需 root)。
 
 ```bash
 # 安装依赖(npm workspaces:packages/shared + apps/collector)
@@ -80,7 +80,7 @@ npm run web            # 环境变量 NETWATCH_DB 指定库路径,默认 ~/.loca
 # Phase 0 spike:采样 nethogs 真实输出(5.5 分钟,自动装 nethogs、注入测试流量;需 root)
 sudo bash docs/samples/run-spike.sh
 
-# 真实采集(spike 完成、nethogs 就绪后;采集端需要 root)
+# 真实采集(Linux 主路径:ss 轮询;采集端需要 root)
 # sudo npm run collector
 ```
 
@@ -115,6 +115,7 @@ journalctl -u netwatch-web -f
 
 ## 文档
 
+- [docs/intro.md](docs/intro.md) — 介绍文档:定位、动机、工作原理、隐私边界与现状
 - [docs/design.md](docs/design.md) — 设计全文:采集层、数据模型、规则引擎、界面线框、功能池
 - [docs/plan.md](docs/plan.md) — 开发计划:Phase 0~8 与验收标准
 - [docs/samples/spike-notes.md](docs/samples/spike-notes.md) — spike 笔记:数据源可行性、格式确认、已知坑

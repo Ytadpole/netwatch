@@ -1,0 +1,24 @@
+<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="style.css">
+<body style="flex-direction:column;gap:0">
+  <div style="display:flex;gap:70px;align-items:stretch">
+    <div style="background:#121826;border:1px solid #232c3f;border-radius:18px;padding:40px 46px;width:640px">
+      <div style="font-size:30px;color:#f5b04c;font-weight:700;margin-bottom:26px">采集进程<span class="dim" style="font-size:24px;font-weight:400"> · 需 root</span></div>
+      <div style="font-size:27px;line-height:2.15;color:#c9d0dd">ss 轮询 → 行解析 → 事件流<br>富化器(域名 / 代理两跳)<br>聚合器(分钟桶)→ 落库<br>规则引擎 → 桌面 / webhook 告警</div>
+    </div>
+    <div style="display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px">
+      <div style="font-size:40px;color:#39435a">▼</div>
+      <div style="background:#1a2130;border:2px solid #f5b04c66;border-radius:14px;padding:22px 40px;text-align:center">
+        <div class="mono" style="font-size:32px;font-weight:700">SQLite</div>
+        <div style="font-size:22px;color:#8a93a6;margin-top:6px">WAL · 唯一耦合点</div>
+      </div>
+      <div style="font-size:40px;color:#39435a">▲</div>
+    </div>
+    <div style="background:#121826;border:1px solid #232c3f;border-radius:18px;padding:40px 46px;width:640px">
+      <div style="font-size:30px;color:#5aa7ff;font-weight:700;margin-bottom:26px">展示进程<span class="dim" style="font-size:24px;font-weight:400"> · 普通用户</span></div>
+      <div style="font-size:27px;line-height:2.15;color:#c9d0dd">Hono API(REST + SSE)<br>React 仪表盘 · 三视图<br>只读打开数据库<br>规则配置 · 白名单管理</div>
+    </div>
+  </div>
+  <div style="margin-top:44px;display:flex;gap:60px;font-size:26px;color:#8a93a6">
+    <span>✕ 采集端不开任何网络端口</span><span>✕ 明细保留 90 天,自动清理</span><span>✕ 采集崩了不影响看历史</span>
+  </div>
+</body>

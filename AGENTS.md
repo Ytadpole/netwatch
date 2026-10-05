@@ -20,6 +20,7 @@
   - `npm test` — collector 测试(node:test 经 tsx;规则引擎/落库断言)。
   - 需要改系统状态的只有 spike 采样脚本(装 nethogs、root 抓包),由用户自己在终端跑,agent 不要尝试 sudo。
 - 前端构建产物仅 `apps/web/dist`(Vite,gitignore 之外需提交与否随 Phase 5 定);其余运行经 tsx。
+- 介绍材料(视频/PPT)由 `media/` 管线脚本化生成,再生成方法见 [media/README.md](media/README.md);大体积帧工作区在 /tmp 不入库。
 
 ## 进程间通道(§5,改代码前必读)
 

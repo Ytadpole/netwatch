@@ -3,7 +3,7 @@
  * netwatch-collector CLI(Phase 1~3):实时打印"谁在传" + 落库 + 规则告警(§5.1/§6)。
  * 用法:tsx src/cli.ts [--mock] [--delay=2] [--no-clear] [--no-db] [--db=path] [--rules=path] [--no-rules]
  *   --mock       mock 数据源(无需 root,开发/演示;默认内存库)
- *   --delay=N    nethogs 采样间隔秒数(默认 2)
+ *   --delay=N    规则引擎采样窗口秒数(默认 2;采样源各自的轮询间隔不受此参数影响)
  *   --no-clear   不清屏,追加式输出(便于重定向观察)
  *   --db=path    落库路径(真实源默认 XDG 数据目录 ~/.local/share/netwatch/netwatch.db)
  *   --rules=path 规则配置 JSON(缺省用 §6 内置默认阈值)
@@ -169,4 +169,4 @@ function shutdown(): void {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
-console.error(`netwatch collector 启动中(源:${mock ? "mock" : `nethogs ${delaySec}s`} · 库:${noDb ? "关闭" : dbPath} · 规则:${engine !== null ? "开" : "关"} · Ctrl+C 退出)…`);
+console.error(`netwatch collector 启动中(源:${mock ? "mock" : `ss 轮询 ${delaySec}s`} · 库:${noDb ? "关闭" : dbPath} · 规则:${engine !== null ? "开" : "关"} · Ctrl+C 退出)…`);

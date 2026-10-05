@@ -1,0 +1,21 @@
+{
+  "newDestination": {
+    "enabled": true,
+    "escalateBytesPerMin": 10485760
+  },
+  "volumeThreshold": {
+    "enabled": true,
+    "bytesPer10min": 20971520,
+    "bytesPerHour": 52428800
+  },
+  "unknownProcess": {
+    "enabled": true,
+    "consecutiveWindows": 3,
+    "bytesPerMin": 1048576
+  },
+  "whitelist": [],
+  "notify": {
+    "desktop": false,
+    "webhookUrl": "http://127.0.0.1:9999/hook"
+  }
+}

@@ -1,0 +1,9 @@
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body { width:1920px; height:1080px; overflow:hidden; }
+body {
+  font-family:"Noto Sans CJK SC",sans-serif; color:#e8eaf0;
+  background:radial-gradient(1200px 800px at 70% 20%, #141a26 0%, #0b0e14 60%);
+  display:flex; align-items:center; justify-content:center;
+}
+.mono { font-family:"JetBrains Mono","Noto Sans Mono",monospace; }
+.amber { color:#f5b04c; } .blue { color:#5aa7ff; } .dim { color:#8a93a6; }
