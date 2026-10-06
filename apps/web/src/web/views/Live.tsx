@@ -24,6 +24,12 @@ export function LiveView({ live, caps }: Props) {
               {caps.perProcessBytes ? `↑ ${fmtRate(p.sentRate)}` : `${p.destinations.length} 条连接`}
             </span>
           </header>
+          {p.exePath !== undefined ? (
+            <p className={`exe muted${p.suspicious ? " suspicious" : ""}`}>
+              {p.suspicious ? "⚠ " : ""}
+              {p.exePath}
+            </p>
+          ) : null}
           {p.destinations.map((d) => (
             <div className="dest" key={`${d.remoteIp}:${d.remotePort}`}>
               <span className="ip">

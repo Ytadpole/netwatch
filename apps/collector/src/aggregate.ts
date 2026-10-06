@@ -1,5 +1,6 @@
 import type { TrafficEvent } from "@netwatch/shared";
 import type { MinuteRow, DestinationSighting } from "./store.js";
+import { isSuspiciousPath, type ProcessInfoLookup } from "./process-info.js";
 
 /** 内存滚动窗口聚合(分钟桶 × 进程 × 目的地),Phase 1 形态;Phase 2 接 Store 落库 */
 
@@ -23,6 +24,11 @@ export interface ProcessLive {
   unattributed: boolean;
   sentRate: number;
   recvRate: number;
+  /** 进程画像(§11,可选:pid 无法解析时不输出) */
+  exePath?: string | undefined;
+  startedAt?: number | undefined;
+  /** exe 落在临时/运行时目录或二进制已删除 */
+  suspicious?: boolean | undefined;
   /** 按上传速率降序 */
   destinations: DestLive[];
 }
@@ -102,12 +108,15 @@ export interface AggregatorOptions {
   rateWindowMs?: number;
   /** 目的地"首见 NEW"窗口(毫秒,§5.1:5 分钟) */
   newDestWindowMs?: number;
+  /** 进程画像回调(§11):pid → exe 路径/启动时刻;不传则快照不含画像字段 */
+  processInfo?: ProcessInfoLookup;
 }
 
 export class RollingAggregator {
   private readonly minuteRetention: number;
   private readonly rateWindowMs: number;
   private readonly newDestWindowMs: number;
+  private readonly processInfo: ProcessInfoLookup | undefined;
 
   private readonly minuteBuckets = new Map<number, Map<string, BucketEntry>>();
   private readonly recent: RecentDelta[] = [];
@@ -123,6 +132,7 @@ export class RollingAggregator {
     this.minuteRetention = opts.minuteRetention ?? 120;
     this.rateWindowMs = opts.rateWindowMs ?? 10_000;
     this.newDestWindowMs = opts.newDestWindowMs ?? 5 * 60_000;
+    this.processInfo = opts.processInfo;
   }
 
   push(e: TrafficEvent): void {
@@ -240,10 +250,14 @@ export class RollingAggregator {
     const processes = [...procMap.values()].map((p) => {
       p.dests.sort((a, b) => b.sentRate - a.sentRate);
       for (const d of p.dests) d.share = p.sentRate > 0 ? d.sentRate / p.sentRate : 0;
+      const info = !p.info.unattributed && p.info.pid !== null ? (this.processInfo?.(p.info.pid) ?? null) : null;
       return {
         process: p.info.process,
         pid: p.info.pid,
         unattributed: p.info.unattributed,
+        exePath: info === null ? undefined : info.exePath,
+        startedAt: info === null ? undefined : info.startedAt,
+        suspicious: info === null ? undefined : isSuspiciousPath(info.exePath),
         sentRate: p.sentRate,
         recvRate: p.recvRate,
         destinations: p.dests,

@@ -134,6 +134,29 @@ test("beacon:规律小包心跳告警一次并冷却;不规律/大体量/白名�
     .filter((a) => a.rule === "beacon").length, 0);
 });
 
+test("可疑路径进程的告警升级(§11):info→warn,detail 标注路径", () => {
+  const eng = new RuleEngine(new Store(":memory:"), loadRulesConfig(), [], {
+    intervalSec: 2,
+    processMeta: (pid) => (pid === 9 ? { exePath: "/tmp/evil-agent", suspicious: true } : null),
+  });
+  eng.process(flow(T0, 1_000, "5.5.5.5", "evil", 9)); // 冷启动首屏批静默
+  const a = eng.process(flow(T0 + 4_000, 1_000, "6.6.6.6", "evil", 9));
+  const nd = a.find((x) => x.rule === "new-destination");
+  assert.ok(nd !== undefined);
+  assert.equal(nd!.severity, "warn"); // info → warn
+  assert.equal(nd!.detail.suspiciousPath, "/tmp/evil-agent");
+  assert.ok(nd!.detail.message.includes("可疑路径"));
+
+  // 非可疑路径进程不升级
+  const eng2 = new RuleEngine(null, loadRulesConfig(), [], {
+    intervalSec: 2,
+    processMeta: (pid) => (pid === 9 ? { exePath: "/usr/bin/ok", suspicious: false } : null),
+  });
+  eng2.process(flow(T0, 1_000, "5.5.5.5", "ok", 9));
+  const b = eng2.process(flow(T0 + 4_000, 1_000, "6.6.6.6", "ok", 9));
+  assert.equal(b.find((x) => x.rule === "new-destination")!.severity, "info");
+});
+
 test("规则配置:JSON 加载、默认补全、坏文件显性报错", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "netwatch-cfg-"));
   const p = path.join(dir, "rules.json");

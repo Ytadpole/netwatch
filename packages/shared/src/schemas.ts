@@ -121,6 +121,11 @@ export const LiveProcessSchema = z.object({
   sentRate: z.number(),
   recvRate: z.number(),
   destinations: z.array(LiveDestSchema),
+  /** 进程画像(§11,可选:真实源读 /proc,mock 为演示伪造;pid 无法解析时不输出) */
+  exePath: z.string().optional(),
+  startedAt: z.number().int().optional(),
+  /** exe 落在临时/运行时目录或二进制已删除(告警升级依据) */
+  suspicious: z.boolean().optional(),
 });
 export type LiveProcess = z.infer<typeof LiveProcessSchema>;
 

@@ -24,12 +24,21 @@ export interface Alert {
     windowSentBytes?: number;
     windowSec?: number;
     thresholdBytes?: number;
+    /** 进程 exe 落在可疑路径(§11 告警升级时标注) */
+    suspiciousPath?: string;
   };
+}
+
+export interface ProcessMeta {
+  exePath: string;
+  suspicious: boolean;
 }
 
 export interface RuleEngineOptions {
   /** 采样间隔秒(nethogs -d),unknown-process 的连续窗口判定用 */
   intervalSec?: number;
+  /** 进程画像回调(§11):命中可疑路径的告警升级(info→warn/warn→high)+ detail 标注 */
+  processMeta?: (pid: number | null, process: string) => ProcessMeta | null;
 }
 
 /** 同一规则键的告警冷却,防止刷屏 */
@@ -64,7 +73,7 @@ export class RuleEngine {
     private readonly store: Store | null,
     private config: RulesConfig,
     private readonly notifiers: Notifier[] = [],
-    opts: RuleEngineOptions = {},
+    private readonly opts: RuleEngineOptions = {},
   ) {
     this.intervalSec = opts.intervalSec ?? 2;
   }
@@ -232,10 +241,27 @@ export class RuleEngine {
   }
 
   private emit(alert: Alert, cooldownKey: string): Alert {
-    this.lastAlertAt.set(cooldownKey, alert.at);
-    this.store?.insertAlert(alert);
-    for (const n of this.notifiers) n.send(alert);
-    return alert;
+    // §11 告警升级:进程 exe 落在可疑路径 → info→warn / warn→high,detail 标注路径
+    const meta =
+      this.opts.processMeta !== undefined && alert.detail.process !== undefined
+        ? this.opts.processMeta(alert.detail.pid ?? null, alert.detail.process)
+        : null;
+    const out =
+      meta !== null && meta.suspicious
+        ? {
+            ...alert,
+            severity: (alert.severity === "info" ? "warn" : "high") as Alert["severity"],
+            detail: {
+              ...alert.detail,
+              suspiciousPath: meta.exePath,
+              message: `${alert.detail.message}(⚠ 可疑路径:${meta.exePath})`,
+            },
+          }
+        : alert;
+    this.lastAlertAt.set(cooldownKey, out.at);
+    this.store?.insertAlert(out);
+    for (const n of this.notifiers) n.send(out);
+    return out;
   }
 
   private isCooling(key: string, at: number): boolean {

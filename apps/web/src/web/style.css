@@ -108,3 +108,7 @@ tr:last-child td { border-bottom: none; }
 /* 目的地画像钻取(§11):Top 目的地行可点击 */
 .rowlink { cursor: pointer; }
 .rowlink:hover td { background: var(--panel-2); }
+
+/* 进程画像(§11):LiveView 卡片上的 exe 路径;可疑路径高亮 */
+.exe { font-size: 11px; margin: 2px 0 6px; word-break: break-all; }
+.exe.suspicious { color: var(--up); font-weight: 600; }

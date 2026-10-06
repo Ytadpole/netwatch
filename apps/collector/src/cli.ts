@@ -21,6 +21,7 @@ import { Store, defaultDbPath } from "./store.js";
 import { loadRulesConfig } from "./rules/config.js";
 import { RuleEngine } from "./rules/engine.js";
 import { desktopNotifier, webhookNotifier } from "./rules/notify.js";
+import { ProcessInspector, isSuspiciousPath, type ProcessInfoLookup } from "./process-info.js";
 
 const argv = process.argv.slice(2);
 const mock = argv.includes("--mock");
@@ -37,7 +38,22 @@ function fail(msg: string): never {
   process.exit(1);
 }
 
-const agg = new RollingAggregator();
+// 进程画像(§11):真实源读 /proc;mock 源的 pid 不存在于系统,用演示路径表(backup-agent 落临时目录,演示可疑路径升级)
+const MOCK_EXE = new Map<number, string>([
+  [1234, "/opt/google/chrome/chrome"],
+  [777, "/usr/bin/mihomo"],
+  [2045, "/usr/bin/nextcloud-sync"],
+  [3311, "/usr/share/code/code"],
+  [5501, "/tmp/.cache-update/agent"],
+]);
+const procInspector = new ProcessInspector();
+const processInfo: ProcessInfoLookup = mock
+  ? (pid) => {
+      const exe = MOCK_EXE.get(pid);
+      return exe === undefined ? null : { exePath: exe };
+    }
+  : (pid) => procInspector.inspect(pid);
+const agg = new RollingAggregator({ processInfo });
 
 // 落库(Phase 2):mock 默认内存库(演示不污染真实数据);真实源默认 XDG 数据目录
 const dbPath = dbArg?.slice(5) ?? (mock ? ":memory:" : defaultDbPath());
@@ -64,7 +80,15 @@ if (!noRules && store !== null) {
       rulesConfig.notify.desktop ? desktopNotifier() : null,
       rulesConfig.notify.webhookUrl !== undefined ? webhookNotifier(rulesConfig.notify.webhookUrl) : null,
     ].filter((n): n is NonNullable<typeof n> => n !== null);
-    engine = new RuleEngine(store, rulesConfig, notifiers, { intervalSec: delaySec });
+    engine = new RuleEngine(store, rulesConfig, notifiers, {
+      intervalSec: delaySec,
+      processMeta: (pid, _process) => {
+        if (pid === null) return null;
+        const info = processInfo(pid);
+        if (info === null) return null;
+        return { exePath: info.exePath, suspicious: isSuspiciousPath(info.exePath) };
+      },
+    });
   } catch (err) {
     console.error(`⚠ 规则引擎未启用:${err instanceof Error ? err.message : String(err)}`);
   }
