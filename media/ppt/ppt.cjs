@@ -52,7 +52,7 @@ const rows2 = [
   ["01", "现在谁在传?", "实时视图:每个进程 → 每个远端地址的上传速率,SSE 秒级推送"],
   ["02", "它传给谁?", "IP → 域名 → 归属地 / ASN / 服务分类,一眼判断\u201c该不该传\u201d"],
   ["03", "它传了多少?", "分钟粒度聚合落库,1h / 24h / 7d 按进程、目的地双维度回看"],
-  ["04", "什么在偷偷传?", "新目的地首传、超阈值大流量、归因失败外传,三条规则自动告警"],
+  ["04", "什么在偷偷传?", "新目的地首传、超阈值大流量、归因失败外传、心跳式小包,四条规则自动告警"],
 ];
 rows2.forEach((r, i) => {
   const y = 1.95 + i * 1.28;
@@ -188,12 +188,13 @@ s.addNotes("两跳关联是本机走 clash/mihomo 类代理时的正确性关键
 /* ---------- 8 规则引擎 ---------- */
 s = p.addSlide();
 chrome(s, "RULES", "08 / 11");
-title(s, "三条规则,盯住\u201c偷偷传\u201d");
+title(s, "四条规则,盯住\u201c偷偷传\u201d");
 const tbl = [
   [{ text: "规则", options: { bold: true, color: TEXT, fill: { color: PANEL2 } } }, { text: "触发条件(默认,可配)", options: { bold: true, color: TEXT, fill: { color: PANEL2 } } }],
   [{ text: "new-destination", options: { color: AMBER, fontFace: MONO, fontSize: 12.5 } }, { text: "已知进程首次向新公网 IP 上传;当分钟 > 10MB 升 warn", options: { color: TEXT } }],
   [{ text: "volume-threshold", options: { color: AMBER, fontFace: MONO, fontSize: 12.5 } }, { text: "单进程 100MB/10min 或 500MB/h", options: { color: TEXT } }],
   [{ text: "unknown-process", options: { color: AMBER, fontFace: MONO, fontSize: 12.5 } }, { text: "归因不到进程的持续外传:连续 3 窗口且 > 1MB/min", options: { color: TEXT } }],
+  [{ text: "beacon", options: { color: AMBER, fontFace: MONO, fontSize: 12.5 } }, { text: "心跳式小包外联:10min 窗口 ≥ 8 次、均值 ≤ 16KB/次、间隔抖动 ≤ 40%、持续 ≥ 5min", options: { color: TEXT } }],
 ];
 s.addTable(tbl, { x: M, y: 2.0, w: 6.1, colW: [2.0, 4.1], border: { pt: 1, color: BORDER }, fill: { color: PANEL }, fontFace: CJK, fontSize: 13, rowH: 0.62, valign: "middle", margin: 0.08 });
 s.addText([{ text: "白名单", options: { bold: true, color: TEXT } }, { text: "  进程 × 目的 IP 命中即静默(支持 * 进程级);已确认的代理中转进程豁免 new-destination", options: { color: MUTED } }],
