@@ -96,3 +96,5 @@ Phase 0 ──→ 1 ──→ 2 ──→ 3 ──→ 4 ──→ 5 ──→ 6/
 - [ ] **→ Phase 1 收尾**:真实源(SsSource)端到端已验证;剩 root 下 30 分钟稳定性验收
 - [x] Phase 2 完成(mock 数据验证):SQLite 落库 + 查询 CLI + zod 校验;真实数据核对随 Phase 1 收口
 - [ ] **→ Phase 5 进行中**:两跳富化 ✓、反向 DNS 兜底 ✓、90 天清理 ✓、systemd unit 文件 ✓、README ✓;剩 GeoLite2(需库文件)/ DNS 观察(需 root)/ 实机部署验收
+- [x] 功能池:Beacon 检测 ✓、目的地画像页 ✓ 骨架、进程画像第一层 ✓(规则引擎四条;详见 §11 与各提交)
+- [x] 介绍材料三件套(intro/视频/PPT+PDF)入库,media/ 管线可脚本化重生成

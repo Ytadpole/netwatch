@@ -1,5 +1,5 @@
 import type { LivePayload } from "@netwatch/shared";
-import { fmtRate } from "../format.js";
+import { fmtClock, fmtRate } from "../format.js";
 
 interface Props {
   live: LivePayload | null;
@@ -28,6 +28,7 @@ export function LiveView({ live, caps }: Props) {
             <p className={`exe muted${p.suspicious ? " suspicious" : ""}`}>
               {p.suspicious ? "⚠ " : ""}
               {p.exePath}
+              {p.startedAt !== undefined ? ` · 启动于 ${fmtClock(p.startedAt)}` : ""}
             </p>
           ) : null}
           {p.destinations.map((d) => (

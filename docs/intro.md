@@ -106,6 +106,7 @@ Linux 首发路径是 **ss 轮询**:定期执行 `ss -tinp state established`,�
 - Phase 0~4 已完成:采集 → 落库 → 查询 → 规则告警 → Web 仪表盘全链路跑通(mock 数据源端到端验证)
 - Phase 5 进行中:环回代理两跳富化、反向 DNS、90 天清理、systemd 双 unit、目的地分类已就绪
 - 真实采集源(ss 轮询)已端到端验证;nethogs 解析器已按 0.8.7 真实样本校准
+- 功能池已落地:Beacon 心跳检测(第 4 条规则)、目的地画像页、进程画像第一层(exe 路径/可疑路径告警升级)
 - 待办:GeoLite2 库接入、DNS 观察(需 root)、root 实机验收(30 分钟稳定性 + 部署自恢复)
 
 进度细节见 [plan.md](plan.md)。

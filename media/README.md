@@ -39,6 +39,8 @@ npm i --prefix /tmp/mediadeps ffmpeg-static pptxgenjs
 
 # 2. 旁白(文案改 media/tts/narr.txt 后重跑)
 media/tts/gen-narr.sh /tmp/vidbuild/narr
+#   注意:字幕文本由 build.mjs 直接读仓库 media/tts/narr.txt(不经工作区副本),
+#   mp3 输出到工作区即可;两者天然同源,不会出现音字不一致
 
 # 3. 合成(卡片 PNG 直接读本目录 video/cards/;帧与旁白读 $MEDIA_BUILD)
 MEDIA_BUILD=/tmp/vidbuild \

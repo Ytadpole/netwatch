@@ -36,8 +36,10 @@ const alert = frameDurs(alertMeta).map((f) => ({ ...f, path: `${ROOT}/frames/ale
 const term = frameDurs(termMeta).map((f) => ({ ...f, path: `${ROOT}/frames/term/${f.name}` }));
 
 // ---------- 旁白 ----------
+// 口播文本固定读仓库 media/tts/narr.txt(与 gen-narr.sh 同源,避免工作区副本分叉导致音字不一致)
+const NARR_TXT = process.env.NARR_TXT ?? new URL("../tts/narr.txt", import.meta.url).pathname;
 const narrText = Object.fromEntries(
-  readFileSync(`${ROOT}/narr.txt`, "utf8").trim().split("\n").map((l) => {
+  readFileSync(NARR_TXT, "utf8").trim().split("\n").map((l) => {
     const [id, ...rest] = l.split("|");
     return [id, rest.join("|")];
   })

@@ -4,17 +4,17 @@
 
 ## 事实来源与当前状态
 
-- 仓库为文档 + 契约包 + 采集端骨架(**mock 源可端到端跑**,真实 nethogs 源待样本校准)。动手前必读:
+- 仓库为文档 + 契约包 + 采集端/展示端两端(**mock 源可端到端跑**;真实源 ss 轮询已实现并端到端验证,nethogs 降级为交叉验证/降级源)。动手前必读:
   - [docs/design.md](docs/design.md) — 设计全文。重点:§3 采集层(TrafficSource 契约)、§4 数据模型、§5 Web/API(§5.1 界面线框)、§6 规则引擎、§11 功能池。
   - [docs/plan.md](docs/plan.md) — Phase 0~8 计划,每个 Phase 末尾有验收标准。
   - [docs/samples/spike-notes.md](docs/samples/spike-notes.md) — spike 结论:数据源可行性、契约定稿决策、已知坑。
-- 工作按 Phase 推进,**Phase 0 差采样一步**(sudo 脚本由用户终端执行),**Phase 1~4 骨架已完成**(mock 全链路:采集 → 落库 → 查询 → 规则告警 → Web 仪表盘;解析器待样本校准,root 实测验收未做)。开工前确认上一 Phase 验收已达成;完成事项勾掉 plan.md 复选框并更新其「当前状态」。
+- 工作按 Phase 推进,**Phase 0~4 完成**(mock 全链路:采集 → 落库 → 查询 → 规则告警 → Web 仪表盘),**Phase 5 进行中**(剩 GeoLite2 接入/DNS 观察/root 实机验收),功能池已落地:Beacon 检测、目的地画像页、进程画像第一层。开工前确认上一 Phase 验收已达成;完成事项勾掉 plan.md 复选框并更新其「当前状态」。
 
 ## 命令
 
 - 根目录 npm workspaces(已初始化):
   - `npm run typecheck` — 全部包 strict TS 校验,必须常绿。
-  - `npm run collector:mock` — mock 源跑采集 CLI,无需 root;`npm run collector` 为真实 nethogs 源,需要 root。
+  - `npm run collector:mock` — mock 源跑采集 CLI,无需 root;`npm run collector` 为真实源(ss 轮询),需要 root。
   - `npm run query -- top 1h [--by=destination]` — 读库查询 CLI,普通用户。
   - `npm run web:build && npm run web` — 构建并启动 Web 仪表盘(http://127.0.0.1:8787;`NETWATCH_DB`/`NETWATCH_RULES`/`NETWATCH_WEB_PORT` 可覆盖)。
   - `npm test` — collector 测试(node:test 经 tsx;规则引擎/落库断言)。
