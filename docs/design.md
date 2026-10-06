@@ -194,6 +194,7 @@ CREATE TABLE alerts (
 GET  /api/live            (SSE)当前活跃流事件流
 GET  /api/top/processes?range=1h|24h|7d
 GET  /api/top/destinations?range=...
+GET  /api/destination/:ip?range=…   (目的地画像:汇总/进程分解/每分钟序列,§11)
 GET  /api/history/series?metric=sent&groupBy=process&range=24h
 GET  /api/alerts          POST /api/alerts/rules   (规则 CRUD)
 ```
@@ -313,7 +314,7 @@ netwatch/
 | --- | --- | --- |
 | Beacon/心跳检测 | ✅ 已实现(规则引擎第 4 条 `beacon`):定时小包外联(间隔方差小 + 长时间存活)是回传行为的典型特征,按「进程 × 目的地」滑窗统计节奏与体量 | 无 |
 | 纯上行连接标注 | 收发比悬殊(只发不收)的连接打「↑」角标,疑似数据外送 | 富化器顺手算 |
-| 目的地画像页 | IP/域名详情:ASN/组织、分类徽标(对象存储/网盘/AI 服务——"谁在往 AI 服务传文件")、历史累计、哪些进程碰过它 | GeoIP + 一张静态分类规则表 |
+| 目的地画像页 | ✅ 骨架已实现(?view=dest&ip=…):域名/分类徽标、区间汇总与峰值、每分钟序列、哪些进程碰过它;ASN/组织待 GeoLite2 接入 | GeoIP(接入中)+ 静态分类规则表 ✓ |
 | 进程画像 | 进程路径、启动时间、Windows 数字签名;路径可疑(临时目录)时告警升级 | /proc(扩展到各平台) |
 | 基线异常学习 | 按「进程 × 目的地」学两周规律,偏离日常模式(时段/量级)即异常;简单统计,不上 ML | flow_minutes 攒够两周数据 |
 | DNS 全记录 | 记录解析行为本身(含未建立连接的域名),防 DNS 隧道类偷传 | §3.3 的加强版 |

@@ -1,6 +1,6 @@
 /** API 客户端(类型来自 @netwatch/shared,改后端返回类型编译期即报错)+ SSE 实时订阅 */
 import { useEffect, useState } from "react";
-import type { AlertRow, LivePayload, RulesFile, TopDestinationRow, TopProcessRow } from "@netwatch/shared";
+import type { AlertRow, DestinationProfile, LivePayload, RulesFile, TopDestinationRow, TopProcessRow } from "@netwatch/shared";
 
 export type Range = "1h" | "24h" | "7d";
 
@@ -12,6 +12,8 @@ async function json<T>(url: string): Promise<T> {
 
 export const fetchTopProcesses = (range: Range): Promise<TopProcessRow[]> => json(`/api/top/processes?range=${range}&limit=10`);
 export const fetchTopDestinations = (range: Range): Promise<TopDestinationRow[]> => json(`/api/top/destinations?range=${range}&limit=10`);
+export const fetchDestinationProfile = (ip: string, range: Range): Promise<DestinationProfile> =>
+  json(`/api/destination/${encodeURIComponent(ip)}?range=${range}`);
 export const fetchAlerts = (): Promise<AlertRow[]> => json("/api/alerts?limit=100");
 export const fetchRules = (): Promise<RulesFile> => json("/api/rules");
 

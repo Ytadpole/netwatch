@@ -8,7 +8,7 @@ import { CATEGORY_LABELS } from "@netwatch/shared/classify";
 
 const RANGES: Range[] = ["1h", "24h", "7d"];
 
-export function HistoryView({ initialRange }: { initialRange: Range }) {
+export function HistoryView({ initialRange, openDest }: { initialRange: Range; openDest: (ip: string) => void }) {
   const [range, setRange] = useState<Range>(initialRange);
   const [groupBy, setGroupBy] = useState<"process" | "destination">("process");
   const [hist, setHist] = useState<HistorySeries | null>(null);
@@ -114,7 +114,7 @@ export function HistoryView({ initialRange }: { initialRange: Range }) {
             </thead>
             <tbody>
               {topDest.map((r) => (
-                <tr key={r.remoteIp}>
+                <tr key={r.remoteIp} className="rowlink" onClick={() => openDest(r.remoteIp)} title="查看目的地画像">
                   <td>
                     {r.remoteIp}
                     {r.domain !== undefined ? <span className="muted"> · {r.domain}</span> : null}

@@ -18,7 +18,7 @@ import {
   defaultRulesPath,
   LivePayloadSchema,
 } from "@netwatch/shared";
-import { topProcesses, topDestinations } from "@netwatch/shared";
+import { topProcesses, topDestinations, destinationProfile } from "@netwatch/shared";
 import { historySeries } from "./history.js";
 import { LiveReader } from "./live.js";
 import { readRulesFile, updateWhitelist } from "./rules-file.js";
@@ -102,6 +102,20 @@ app.get("/api/history/series", (c) => {
   }
   try {
     return c.json(historySeries(dbPath, { rangeSec, groupBy, metric }));
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
+});
+
+app.get("/api/destination/:ip", (c) => {
+  let rangeSec: number;
+  try {
+    rangeSec = parseRange(c.req.query("range"));
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+  try {
+    return c.json(destinationProfile({ dbPath, remoteIp: decodeURIComponent(c.req.param("ip")), rangeSec }));
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
   }

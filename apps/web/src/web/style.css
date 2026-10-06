@@ -104,3 +104,7 @@ tr:last-child td { border-bottom: none; }
 .wl-form input::placeholder { color: var(--gray); }
 .wl-form button, .del { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 5px 12px; }
 .wl-form button:hover, .del:hover { border-color: var(--muted); }
+
+/* 目的地画像钻取(§11):Top 目的地行可点击 */
+.rowlink { cursor: pointer; }
+.rowlink:hover td { background: var(--panel-2); }

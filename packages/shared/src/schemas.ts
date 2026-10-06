@@ -66,6 +66,41 @@ export const TopDestinationRowSchema = z.object({
 });
 export type TopDestinationRow = z.infer<typeof TopDestinationRowSchema>;
 
+/** 目的地画像(§11):维表信息 + 区间汇总 + 进程分解 + 每分钟序列 */
+export const DestProfileProcessSchema = z.object({
+  kind: z.enum(["flow", "unknown-flow"]),
+  pid: z.number().int(),
+  process: z.string(),
+  totalSent: z.number().int().nonnegative(),
+  totalRecv: z.number().int().nonnegative(),
+  peakMinuteSent: z.number().int().nonnegative(),
+});
+export type DestProfileProcess = z.infer<typeof DestProfileProcessSchema>;
+
+export const DestinationProfileSchema = z.object({
+  remoteIp: z.string(),
+  domain: z.string().nullable().optional(),
+  country: z.string().nullable().optional(),
+  asn: z.string().nullable().optional(),
+  firstSeen: z.number().int().nonnegative().nullable().optional(),
+  /** 静态规则表分类(§11;由 domain 查询时计算,未知不输出) */
+  category: z.enum(["ai", "cloud-storage", "object-storage"]).optional(),
+  totalSent: z.number().int().nonnegative(),
+  totalRecv: z.number().int().nonnegative(),
+  peakMinuteSent: z.number().int().nonnegative(),
+  /** 区间内碰过该目的地的进程(含归因失败组) */
+  processes: z.array(DestProfileProcessSchema),
+  /** 每分钟上传/下载序列(画像页面积图) */
+  series: z.array(
+    z.object({
+      minute: z.number().int(),
+      sent: z.number().int().nonnegative(),
+      recv: z.number().int().nonnegative(),
+    }),
+  ),
+});
+export type DestinationProfile = z.infer<typeof DestinationProfileSchema>;
+
 /** 实时快照(§5 进程间通道):采集端写 live_snapshot 行,Web 端读出经 SSE 推浏览器 */
 export const LiveDestSchema = z.object({
   remoteIp: z.string(),

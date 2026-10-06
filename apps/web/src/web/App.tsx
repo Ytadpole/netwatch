@@ -4,12 +4,13 @@ import { fmtRate } from "./format.js";
 import { LiveView } from "./views/Live.js";
 import { HistoryView } from "./views/History.js";
 import { AlertsView } from "./views/Alerts.js";
+import { DestView } from "./views/Dest.js";
 
-type View = "live" | "history" | "alerts";
+type View = "live" | "history" | "alerts" | "dest";
 
 function viewFromUrl(): View {
   const v = new URLSearchParams(location.search).get("view");
-  return v === "history" || v === "alerts" ? v : "live";
+  return v === "history" || v === "alerts" || v === "dest" ? v : "live";
 }
 
 const NAV: Array<{ key: View; label: string }> = [
@@ -26,6 +27,16 @@ export function App() {
     setView(v);
     const u = new URLSearchParams(location.search);
     u.set("view", v);
+    if (v !== "dest") u.delete("ip");
+    history.replaceState(null, "", `?${u.toString()}`);
+  };
+
+  /** 目的地画像钻取(§11):Top 目的地行点击进入,URL 即状态(?view=dest&ip=…) */
+  const openDest = (ip: string): void => {
+    setView("dest");
+    const u = new URLSearchParams(location.search);
+    u.set("view", "dest");
+    u.set("ip", ip);
     history.replaceState(null, "", `?${u.toString()}`);
   };
 
@@ -80,8 +91,9 @@ export function App() {
         </nav>
         <main className="content">
           {view === "live" && <LiveView live={live} caps={caps} />}
-          {view === "history" && <HistoryView initialRange={"24h" as Range} />}
+          {view === "history" && <HistoryView initialRange={"24h" as Range} openDest={openDest} />}
           {view === "alerts" && <AlertsView />}
+          {view === "dest" && <DestView onBack={() => nav("history")} />}
         </main>
       </div>
     </div>
