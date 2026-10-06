@@ -18,7 +18,7 @@
 - **进程级归因**:流量归到具体进程,按"进程 → 目的地"两级展示
 - **目的地富化**:反向 DNS + GeoLite2 本地库(离线查询,本工具自己不外联;DNS 观察规划中)
 - **持久化与查询**:分钟粒度聚合落 SQLite(WAL),`netwatch-query top 1h|24h|7d` 按进程/目的地回看
-- **三条告警规则**:`new-destination`(新目的地)、`volume-threshold`(上传量异常)、`unknown-process`(归因失败外传),白名单静默,桌面通知 + webhook
+- **四条告警规则**:`new-destination`(新目的地)、`volume-threshold`(上传量异常)、`unknown-process`(归因失败外传)、`beacon`(心跳式定时小包外联),白名单静默,桌面通知 + webhook
 - **Web 仪表盘**:深色主题,实时/历史/告警三视图,URL 即状态,可直接刷新直达
 - **权限分离**:采集端(root)只写库不开网络端口;展示端普通用户;SQLite 是两个进程唯一耦合点
 

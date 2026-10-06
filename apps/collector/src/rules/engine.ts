@@ -7,7 +7,7 @@ import type { Store } from "../store.js";
 import type { RulesConfig } from "./config.js";
 import type { Notifier } from "./notify.js";
 
-export type AlertRule = "new-destination" | "volume-threshold" | "unknown-process";
+export type AlertRule = "new-destination" | "volume-threshold" | "unknown-process" | "beacon";
 export type AlertSeverity = "info" | "warn" | "high";
 
 export interface Alert {
@@ -57,6 +57,8 @@ export class RuleEngine {
   /** 进程 → 1h 内上传增量环(体量规则) */
   private readonly flowRing = new Map<string, Delta[]>();
   private readonly unknownRing: Delta[] = [];
+  /** 心跳检测:「进程|目的地」→ 窗口内上传增量环(§11 第 4 条) */
+  private readonly beaconRing = new Map<string, Delta[]>();
 
   constructor(
     private readonly store: Store | null,
@@ -85,6 +87,8 @@ export class RuleEngine {
       if (nd !== null) alerts.push(nd);
       const vt = this.checkVolume(e.process, e.at);
       if (vt !== null) alerts.push(vt);
+      const bc = this.checkBeacon(e);
+      if (bc !== null) alerts.push(bc);
     } else {
       this.unknownRing.push({ at: e.at, sent: e.sentBytes });
       this.pruneRings(e.at);
@@ -182,6 +186,48 @@ export class RuleEngine {
         thresholdBytes: cfg.bytesPerMin,
       } },
       "unknown-process",
+    );
+  }
+
+  /** §11 第 4 条:心跳式外联 —— 同进程对同一公网目的地,窗口内反复小包上传、间隔规律且持续足够久 */
+  private checkBeacon(e: Extract<TrafficEvent, { kind: "flow" }>): Alert | null {
+    const cfg = this.config.beacon;
+    if (!cfg.enabled) return null;
+    if (isLoopback(e.remoteIp) || isLan(e.remoteIp)) return null; // 只盯公网直连
+    if (this.whitelisted(e.process, e.remoteIp)) return null;
+    const key = `${e.process}|${e.remoteIp}`;
+    const ring = this.beaconRing.get(key) ?? [];
+    ring.push({ at: e.at, sent: e.sentBytes });
+    const windowMs = cfg.windowMin * 60_000;
+    while (ring.length > 0 && ring[0]!.at < e.at - windowMs) ring.shift();
+    this.beaconRing.set(key, ring);
+    if (ring.length < cfg.minSamples) return null; // 采样不足,无从谈节奏
+    const first = ring[0]!;
+    const last = ring[ring.length - 1]!;
+    if (last.at - first.at < cfg.minSpanMs) return null; // 模式尚未持续足够久
+    const total = ring.reduce((s, d) => s + d.sent, 0);
+    const avg = total / ring.length;
+    if (avg > cfg.maxAvgBytes) return null; // 体量传输不是心跳
+    const gaps: number[] = [];
+    for (let i = 1; i < ring.length; i++) gaps.push(ring[i]!.at - ring[i - 1]!.at);
+    const meanGap = gaps.reduce((s, g) => s + g, 0) / gaps.length;
+    if (meanGap > cfg.maxMeanGapMs) return null; // 太稀疏
+    const maxGap = Math.max(...gaps);
+    const minGap = Math.min(...gaps);
+    if ((maxGap - minGap) / meanGap > cfg.gapJitter) return null; // 间隔不规律
+    if (this.isCooling(`beacon|${key}`, e.at)) return null;
+    const jitterPct = Math.round(((maxGap - minGap) / meanGap) * 100);
+    return this.emit(
+      { at: e.at, rule: "beacon", severity: "info", detail: {
+        message: `${e.process} 对 ${e.remoteIp}:${e.remotePort} 呈心跳式外联:${cfg.windowMin} 分钟窗口内 ${ring.length} 次小包上传(均值 ${Math.round(avg)} B/次,间隔抖动 ${jitterPct}%)`,
+        process: e.process,
+        pid: e.pid,
+        remoteIp: e.remoteIp,
+        remotePort: e.remotePort,
+        windowSentBytes: total,
+        windowSec: cfg.windowMin * 60,
+      } },
+      `beacon|${key}`,
     );
   }
 

@@ -74,7 +74,7 @@
 - [ ] Phase 6:eBPF(Linux 精确统计,与 nethogs 交叉验证误差 < 5%)
 - [ ] Phase 7:macOS 适配器(`nettop -P -L`,同一接口跑通)
 - [ ] Phase 8:Windows ETW helper 评估 → 降级路径验证
-- [ ] 之后按 §11 功能池取用,优先:Beacon 检测 → 目的地画像页
+- [x] §11 功能池第一项:Beacon 检测 ✓(规则引擎第 4 条 `beacon`,按「进程 × 目的地」滑窗统计节奏/体量/跨度,规则测试覆盖);下一个:目的地画像页
 
 ---
 

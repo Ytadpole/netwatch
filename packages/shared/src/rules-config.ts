@@ -19,6 +19,21 @@ export const RulesFileSchema = z.object({
     consecutiveWindows: z.number().int().min(2),
     bytesPerMin: z.number().int().positive(),
   }),
+  beacon: z.object({
+    enabled: z.boolean(),
+    /** 观测窗(分钟):窗口内统计「进程 × 目的地」的上传节奏 */
+    windowMin: z.number().int().min(1),
+    /** 窗口内至少多少次上传采样才开始判定 */
+    minSamples: z.number().int().min(4),
+    /** 单次上传均值超过该值视为体量传输,不算心跳小包 */
+    maxAvgBytes: z.number().int().positive(),
+    /** 平均间隔上限:比这更稀疏的不算心跳 */
+    maxMeanGapMs: z.number().int().positive(),
+    /** 间隔抖动上限:(maxGap-minGap)/meanGap */
+    gapJitter: z.number().min(0).max(1),
+    /** 心跳模式需持续存在的最短跨度 */
+    minSpanMs: z.number().int().positive(),
+  }),
   /** process × remote_ip 级白名单,命中静默;remoteIp 可用 "*" 表示该进程对任意目的地静默 */
   whitelist: z.array(z.object({ process: z.string().min(1), remoteIp: z.string().min(1) })),
   notify: z.object({
@@ -33,6 +48,7 @@ export const DEFAULT_RULES: RulesFile = {
   newDestination: { enabled: true, escalateBytesPerMin: 10 * 1024 * 1024 },
   volumeThreshold: { enabled: true, bytesPer10min: 100 * 1024 * 1024, bytesPerHour: 500 * 1024 * 1024 },
   unknownProcess: { enabled: true, consecutiveWindows: 3, bytesPerMin: 1024 * 1024 },
+  beacon: { enabled: true, windowMin: 10, minSamples: 8, maxAvgBytes: 16_000, maxMeanGapMs: 90_000, gapJitter: 0.4, minSpanMs: 300_000 },
   whitelist: [],
   notify: { desktop: true },
 };
@@ -48,6 +64,7 @@ export function mergeRulesFile(partial: unknown): RulesFile {
     newDestination: section("newDestination"),
     volumeThreshold: section("volumeThreshold"),
     unknownProcess: section("unknownProcess"),
+  beacon: section("beacon"),
     whitelist: Array.isArray(p.whitelist) ? (p.whitelist as RulesFile["whitelist"]) : DEFAULT_RULES.whitelist,
     notify: section("notify"),
   };

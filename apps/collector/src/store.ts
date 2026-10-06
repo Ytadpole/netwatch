@@ -171,7 +171,7 @@ export class Store {
 
 export interface AlertInsert {
   at: number;
-  rule: "new-destination" | "volume-threshold" | "unknown-process";
+  rule: "new-destination" | "volume-threshold" | "unknown-process" | "beacon";
   severity: "info" | "warn" | "high";
   detail: unknown;
 }

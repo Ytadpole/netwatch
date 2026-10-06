@@ -81,6 +81,14 @@ export function AlertsView() {
                       : "关闭"}
                   </td>
                 </tr>
+                <tr>
+                  <td>beacon</td>
+                  <td className="num">
+                    {rules.beacon.enabled
+                      ? `${rules.beacon.windowMin}min 窗口 ≥${rules.beacon.minSamples} 次、均值 ≤ ${fmtBytes(rules.beacon.maxAvgBytes)}/次、间隔抖动 ≤ ${Math.round(rules.beacon.gapJitter * 100)}%`
+                      : "关闭"}
+                  </td>
+                </tr>
               </tbody>
             </table>
           )}

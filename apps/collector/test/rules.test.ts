@@ -91,6 +91,49 @@ test("unknown-process:连续窗口高速率外传告警;低速率不告警", () 
   assert.equal(quiet.filter((a) => a.rule === "unknown-process").length, 0);
 });
 
+test("beacon:规律小包心跳告警一次并冷却;不规律/大体量/白名单不告警", () => {
+  // 规律小包:每 2s 一拍 2KB,持续到跨度 ≥ 5min(默认 minSpanMs)→ 触发 info 一次
+  const eng = new RuleEngine(new Store(":memory:"), loadRulesConfig(), [], { intervalSec: 2 });
+  const alerts: Alert[] = [];
+  for (let i = 0; i < 190; i++) {
+    alerts.push(...eng.process(flow(T0 + i * 2_000, 2_000, "203.0.113.9", "telemetry", 9)));
+  }
+  const bc = alerts.filter((a) => a.rule === "beacon");
+  assert.equal(bc.length, 1);
+  assert.equal(bc[0]!.severity, "info");
+  assert.equal(bc[0]!.detail.process, "telemetry");
+  assert.equal(bc[0]!.detail.remoteIp, "203.0.113.9");
+  // 冷却期内继续心跳不重复
+  const more = eng.process(flow(T0 + 190 * 2_000, 2_000, "203.0.113.9", "telemetry", 9));
+  assert.equal(more.filter((a) => a.rule === "beacon").length, 0);
+
+  // 间隔不规律(2s/6s/11s 循环,抖动 ≈142% > 40%)不触发
+  const eng2 = new RuleEngine(null, loadRulesConfig(), [], { intervalSec: 2 });
+  let at = T0;
+  for (let i = 0; i < 260; i++) {
+    eng2.process(flow(at, 2_000, "203.0.113.10", "chatty", 9));
+    at += i % 3 === 0 ? 2_000 : i % 3 === 1 ? 6_000 : 11_000;
+  }
+  assert.equal(alerts.filter((a) => a.rule === "beacon" && a.detail.process === "chatty").length, 0);
+
+  // 规律但体量大(100KB/拍,正常同步的形态)不触发
+  const eng3 = new RuleEngine(null, loadRulesConfig(), [], { intervalSec: 2 });
+  for (let i = 0; i < 200; i++) {
+    eng3.process(flow(T0 + i * 2_000, 100_000, "203.0.113.11", "sync", 9));
+  }
+  assert.equal(eng3.process(flow(T0 + 200 * 2_000, 100_000, "203.0.113.11", "sync", 9))
+    .filter((a) => a.rule === "beacon").length, 0);
+
+  // 白名单(进程 × IP)静默
+  const eng4 = new RuleEngine(null, loadRulesConfig(), [], { intervalSec: 2 });
+  eng4.config.whitelist.push({ process: "ok-heart", remoteIp: "203.0.113.12" });
+  for (let i = 0; i < 200; i++) {
+    eng4.process(flow(T0 + i * 2_000, 2_000, "203.0.113.12", "ok-heart", 9));
+  }
+  assert.equal(eng4.process(flow(T0 + 200 * 2_000, 2_000, "203.0.113.12", "ok-heart", 9))
+    .filter((a) => a.rule === "beacon").length, 0);
+});
+
 test("规则配置:JSON 加载、默认补全、坏文件显性报错", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "netwatch-cfg-"));
   const p = path.join(dir, "rules.json");
@@ -98,6 +141,7 @@ test("规则配置:JSON 加载、默认补全、坏文件显性报错", async ()
   const cfg = loadRulesConfig(p);
   assert.equal(cfg.volumeThreshold.bytesPer10min, 1);
   assert.equal(cfg.newDestination.enabled, true); // 未写字段的默认补全
+  assert.equal(cfg.beacon.enabled, true); // 第 4 条默认开启
   assert.equal(cfg.whitelist.length, 1);
 
   await writeFile(p, "{ broken json");
