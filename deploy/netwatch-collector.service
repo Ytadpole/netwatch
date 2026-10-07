@@ -1,6 +1,6 @@
-# 采集端(需 root):解析器抓包 + 落库 + 规则告警;不开任何网络端口
-# 安装:sudo cp deploy/netwatch-collector.service /etc/systemd/system/
-#      (先按实际仓库路径/Node 路径改 WorkingDirectory 与 ExecStart)
+# 采集端(root):ss 轮询采集 + 落库 + 规则/基线告警;不开任何网络端口
+# 本文件含 @占位@,由 deploy/install.sh 渲染后装入 /etc/systemd/system/(勿直接 cp)
+# 手动安装需替换:@REPO_DIR@ 仓库路径;@NODE_BIN@ node 可执行(nvm 用 `command -v node` 确认)
 [Unit]
 Description=netwatch collector - 进程级上传采集(root)
 Documentation=https://github.com/Ytadpole/netwatch
@@ -9,11 +9,16 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-# 按实际安装路径调整;node 路径用 `which node` 确认(nvm 安装时不是 /usr/bin/node)
-WorkingDirectory=/opt/netwatch
-ExecStart=/usr/bin/env node --import tsx apps/collector/src/cli.ts
+User=root
+WorkingDirectory=@REPO_DIR@
+ExecStart=@NODE_BIN@ --import tsx apps/collector/src/cli.ts
 Restart=always
 RestartSec=5
+# 共享状态:库与规则文件放 /var/lib/netwatch,与展示端(User=普通用户)通过 SQLite 文件耦合
+# UMask=0000 → db/-wal/-shm 为 666,展示端只读连接可读(展示端 After=本服务,-shm 已存在)
+Environment=NETWATCH_DB=/var/lib/netwatch/netwatch.db
+Environment=NETWATCH_RULES=/var/lib/netwatch/rules.json
+UMask=0000
 # 日志进 journald:journalctl -u netwatch-collector -f
 StandardOutput=journal
 StandardError=journal

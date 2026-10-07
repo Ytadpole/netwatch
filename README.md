@@ -88,24 +88,21 @@ sudo bash docs/samples/run-spike.sh
 
 ## 部署(systemd 常驻)
 
-单机部署 = 两个服务:**采集端**(root,只写库不开端口)+ **展示端**(普通用户,只读库),SQLite 是唯一耦合点。
+单机部署 = 两个服务:**采集端**(root,只写库不开端口)+ **展示端**(普通用户,只读库),通过 `/var/lib/netwatch/` 耦合:SQLite 库(采集端 `UMask=0000` 保证 WAL 文件对展示端可读)+ 规则文件(展示端写白名单)。unit 模板里的 `@占位@` 由安装脚本渲染(仓库路径 / node 路径 / 用户)。
 
 ```bash
-# 1. 代码放 /opt/netwatch(或改 unit 文件里的 WorkingDirectory),安装依赖并构建前端
-sudo rsync -a ./ /opt/netwatch/ --exclude node_modules --exclude .git
-cd /opt/netwatch && sudo npm install && sudo npm run web:build
+# 一次性:依赖 + 前端产物(仓库直跑;/opt 安装改 install.sh 里的 REPO_DIR)
+npm install && npm run web:build
 
-# 2. 安装并启用两个 unit(User=、WorkingDirectory=、node 路径按实际情况改)
-sudo cp deploy/netwatch-collector.service deploy/netwatch-web.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now netwatch-collector netwatch-web
+# 安装并启用(sudo 只在这一步;幂等,更新后重跑即可)
+sudo bash deploy/install.sh
 
-# 3. 状态与日志
+# 状态与日志
 journalctl -u netwatch-collector -f
 journalctl -u netwatch-web -f
 ```
 
-`enable --now` + `Restart=always`:重启机器后两服务自动恢复。
+`enable --now` + `Restart=always`:重启机器后两服务自动恢复(Phase 5 验收项)。数据在 `/var/lib/netwatch/netwatch.db`,规则在 `/var/lib/netwatch/rules.json`。
 
 ## 数据
 
