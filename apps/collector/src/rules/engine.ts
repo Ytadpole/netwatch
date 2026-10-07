@@ -7,7 +7,13 @@ import type { Store } from "../store.js";
 import type { RulesConfig } from "./config.js";
 import type { Notifier } from "./notify.js";
 
-export type AlertRule = "new-destination" | "volume-threshold" | "unknown-process" | "beacon";
+export type AlertRule =
+  | "new-destination"
+  | "volume-threshold"
+  | "unknown-process"
+  | "beacon"
+  /** 学习型分析器(rules/baseline.ts)产出,非事件规则 */
+  | "baseline-anomaly";
 export type AlertSeverity = "info" | "warn" | "high";
 
 export interface Alert {

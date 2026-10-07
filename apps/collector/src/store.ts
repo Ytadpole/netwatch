@@ -27,6 +27,17 @@ export interface DestinationSighting {
   domain?: string;
 }
 
+/** 每日上传总量(按「kind×pid×process×remote_ip×本地日」聚合);基线异常学习(§11)输入 */
+export interface DailyFlowTotal {
+  kind: "flow" | "unknown-flow";
+  pid: number;
+  process: string;
+  remoteIp: string;
+  /** 本地时区日期(YYYY-MM-DD) */
+  day: string;
+  sent: number;
+}
+
 export const PID_SENTINEL = -1; // flow.pid=null → -1(进程名已知、PID 缺失)
 
 // defaultDbPath 上移到 @netwatch/shared(两进程共用同一默认路径);此处保持再导出兼容
@@ -144,6 +155,27 @@ export class Store {
     return row?.first_seen ?? null;
   }
 
+  /** 每日上传总量(基线异常学习 §11 输入;每小时一次的冷路径,内联 prepare) */
+  dailyFlowTotals(sinceMs: number, untilMs: number): Array<DailyFlowTotal> {
+    const rows = this.db
+      .prepare(
+        `SELECT kind, pid, process, remote_ip,
+                date(minute / 1000, 'unixepoch', 'localtime') AS day,
+                SUM(sent) AS sent
+         FROM flow_minutes WHERE minute >= ? AND minute < ?
+         GROUP BY kind, pid, process, remote_ip, day`,
+      )
+      .all(sinceMs, untilMs) as Array<Record<string, unknown>>;
+    return rows.map((r) => ({
+      kind: r.kind as "flow" | "unknown-flow",
+      pid: Number(r.pid),
+      process: String(r.process),
+      remoteIp: String(r.remote_ip),
+      day: String(r.day),
+      sent: Number(r.sent),
+    }));
+  }
+
   /** 告警入库(§6);detail 为触发快照对象,以 JSON 文本存储 */
   insertAlert(alert: AlertInsert): number {
     const r = this.stmtAlertInsert.run(alert.at, alert.rule, alert.severity, JSON.stringify(alert.detail));
@@ -171,7 +203,7 @@ export class Store {
 
 export interface AlertInsert {
   at: number;
-  rule: "new-destination" | "volume-threshold" | "unknown-process" | "beacon";
+  rule: "new-destination" | "volume-threshold" | "unknown-process" | "beacon" | "baseline-anomaly";
   severity: "info" | "warn" | "high";
   detail: unknown;
 }

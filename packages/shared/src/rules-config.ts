@@ -31,8 +31,21 @@ export const RulesFileSchema = z.object({
     maxMeanGapMs: z.number().int().positive(),
     /** 间隔抖动上限:(maxGap-minGap)/meanGap */
     gapJitter: z.number().min(0).max(1),
-    /** 心跳模式需持续存在的最短跨度 */
-    minSpanMs: z.number().int().positive(),
+  /** 心跳模式需持续存在的最短跨度 */
+  minSpanMs: z.number().int().positive(),
+  }),
+  baseline: z.object({
+    enabled: z.boolean(),
+    /** 学习窗(天):用过去 N-1 天(不含今天)的按日上传总量做基线 */
+    historyDays: z.number().int().min(7),
+    /** 至少多少个活跃日才开始判定(数据不足静默,§11:约两周起效) */
+    minHistoryDays: z.number().int().min(3),
+    /** 当日量超出基线均值 + N×σ 判为异常 */
+    sigma: z.number().min(1),
+    /** 当日上传量绝对下限:低于此值不告警(防小流量噪声) */
+    floorBytes: z.number().int().positive(),
+    /** 相对护栏:当日量须 > 基线均值 × 该倍数(防低方差误报) */
+    minRatio: z.number().min(1),
   }),
   /** process × remote_ip 级白名单,命中静默;remoteIp 可用 "*" 表示该进程对任意目的地静默 */
   whitelist: z.array(z.object({ process: z.string().min(1), remoteIp: z.string().min(1) })),
@@ -49,6 +62,7 @@ export const DEFAULT_RULES: RulesFile = {
   volumeThreshold: { enabled: true, bytesPer10min: 100 * 1024 * 1024, bytesPerHour: 500 * 1024 * 1024 },
   unknownProcess: { enabled: true, consecutiveWindows: 3, bytesPerMin: 1024 * 1024 },
   beacon: { enabled: true, windowMin: 10, minSamples: 8, maxAvgBytes: 16_000, maxMeanGapMs: 90_000, gapJitter: 0.4, minSpanMs: 300_000 },
+  baseline: { enabled: true, historyDays: 14, minHistoryDays: 10, sigma: 3, floorBytes: 10 * 1024 * 1024, minRatio: 1.5 },
   whitelist: [],
   notify: { desktop: true },
 };
@@ -65,6 +79,7 @@ export function mergeRulesFile(partial: unknown): RulesFile {
     volumeThreshold: section("volumeThreshold"),
     unknownProcess: section("unknownProcess"),
   beacon: section("beacon"),
+  baseline: section("baseline"),
     whitelist: Array.isArray(p.whitelist) ? (p.whitelist as RulesFile["whitelist"]) : DEFAULT_RULES.whitelist,
     notify: section("notify"),
   };

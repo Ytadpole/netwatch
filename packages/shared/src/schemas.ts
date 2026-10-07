@@ -33,7 +33,8 @@ export type DestinationRow = z.infer<typeof DestinationRowSchema>;
 export const AlertRowSchema = z.object({
   id: z.number().int(),
   at: z.number().int(),
-  rule: z.enum(["new-destination", "volume-threshold", "unknown-process"]),
+  /** 读侧容错:规则名是开放集合(事件规则 + 学习型分析器),未知名照常显示而非 500 */
+  rule: z.string(),
   severity: z.enum(["info", "warn", "high"]),
   detail: z.unknown(),
 });

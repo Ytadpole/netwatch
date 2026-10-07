@@ -20,6 +20,7 @@ import { ReverseDns } from "./revdns.js";
 import { Store, defaultDbPath } from "./store.js";
 import { loadRulesConfig } from "./rules/config.js";
 import { RuleEngine } from "./rules/engine.js";
+import { BaselineAnalyzer } from "./rules/baseline.js";
 import { desktopNotifier, webhookNotifier } from "./rules/notify.js";
 import { ProcessInspector, isSuspiciousPath, type ProcessInfoLookup } from "./process-info.js";
 
@@ -67,10 +68,12 @@ if (!noDb) {
 }
 let storeErrorLogged = false;
 let lastPruneAt = 0;
+let lastBaselineAt = 0;
 
 // 规则引擎(Phase 3):依赖落库的 destinations 表做首见判定,故跟随 store 存在与否
 // 配置来源:--rules=path > 默认路径文件(~/.config/netwatch/rules.json,存在即加载)> 内置默认;SIGHUP 热重载
 let engine: RuleEngine | null = null;
+let baseline: BaselineAnalyzer | null = null;
 let rulesPath: string | undefined = rulesArg?.slice(8);
 if (rulesPath === undefined && existsSync(defaultRulesPath())) rulesPath = defaultRulesPath();
 if (!noRules && store !== null) {
@@ -89,6 +92,7 @@ if (!noRules && store !== null) {
         return { exePath: info.exePath, suspicious: isSuspiciousPath(info.exePath) };
       },
     });
+    baseline = new BaselineAnalyzer(store, rulesConfig, notifiers);
   } catch (err) {
     console.error(`⚠ 规则引擎未启用:${err instanceof Error ? err.message : String(err)}`);
   }
@@ -97,6 +101,7 @@ process.on("SIGHUP", () => {
   if (engine === null) return;
   try {
     engine.updateConfig(loadRulesConfig(rulesPath));
+    baseline?.updateConfig(loadRulesConfig(rulesPath));
     console.error("↻ 规则配置已重载(SIGHUP)");
   } catch (err) {
     console.error(`⚠ 规则配置重载失败:${err instanceof Error ? err.message : String(err)}`);
@@ -138,6 +143,13 @@ const timer = setInterval(() => {
         lastPruneAt = now;
         const n = store.pruneOlderThan(90, now);
         if (n > 0) console.error(`🧹 已清理 90 天前的 flow_minutes 明细:${n} 行`);
+      }
+      // 基线异常学习(§11):每小时最多跑一次;活跃日不足 minHistoryDays 时静默积累
+      if (baseline !== null && now - lastBaselineAt > 3_600_000) {
+        lastBaselineAt = now;
+        for (const a of baseline.run(now)) {
+          console.error(`${YELLOW}🔔 [${a.severity}] ${a.rule}${RESET} ${a.detail.message}${RESET}`);
+        }
       }
     } catch (err) {
       if (!storeErrorLogged) {

@@ -89,6 +89,14 @@ export function AlertsView() {
                       : "关闭"}
                   </td>
                 </tr>
+                <tr>
+                  <td>baseline-anomaly</td>
+                  <td className="num">
+                    {rules.baseline.enabled
+                      ? `学习型:今日上传 > 近 ${rules.baseline.historyDays - 1} 天活跃日均值 + ${rules.baseline.sigma}σ(且 > 均值 × ${rules.baseline.minRatio}、≥ ${fmtBytes(rules.baseline.floorBytes)})`
+                      : "关闭"}
+                  </td>
+                </tr>
               </tbody>
             </table>
           )}

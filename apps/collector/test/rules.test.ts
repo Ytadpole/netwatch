@@ -165,6 +165,7 @@ test("规则配置:JSON 加载、默认补全、坏文件显性报错", async ()
   assert.equal(cfg.volumeThreshold.bytesPer10min, 1);
   assert.equal(cfg.newDestination.enabled, true); // 未写字段的默认补全
   assert.equal(cfg.beacon.enabled, true); // 第 4 条默认开启
+  assert.equal(cfg.baseline.enabled, true); // 学习型分析器默认开启
   assert.equal(cfg.whitelist.length, 1);
 
   await writeFile(p, "{ broken json");
